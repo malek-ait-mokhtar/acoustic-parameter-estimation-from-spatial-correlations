@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 from acoustic_estimation.estimation import (
     closest_minimum_to_wavenumber,
@@ -14,6 +15,9 @@ from acoustic_estimation.estimation import (
     refine_local_minima,
     sound_speed_from_wavenumber,
     theoretical_wavenumber,
+)
+from acoustic_estimation.plotting import (
+    plot_rss_landscape,
 )
 
 
@@ -48,6 +52,7 @@ def analyze_rss_landscape(
     reference_sound_speed: float = 347.0,
     n_grid: int = 12000,
     top_n: int = 20,
+    figure_path: str | Path | None = None,
 ) -> None:
     """Analyse local RSS minima near a target frequency.
 
@@ -365,6 +370,30 @@ def analyze_rss_landscape(
         f"{100 * closest_relative_k_error:.2f}%"
     )
 
+    # ------------------------------------------------------------------
+    # Optional RSS-landscape figure.
+    # ------------------------------------------------------------------
+    
+    if figure_path is not None:
+        figure = plot_rss_landscape(
+            k_grid=k_grid,
+            rss_grid=rss_grid,
+            theoretical_wavenumber=theoretical_k,
+            baseline_wavenumber=default_wavenumber,
+            local_minima=minima,
+            frequency=frequency,
+            top_n=top_n,
+            path=figure_path,
+        )
+
+        plt.close(figure)
+
+        print()
+        print(
+            f"Figure saved to: "
+            f"{figure_path}"
+        )
+
 
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
@@ -416,6 +445,13 @@ def parse_args() -> argparse.Namespace:
             "(default: 20)."
         ),
     )
+    
+    parser.add_argument(
+        "--figure",
+        type=Path,
+        default=None,
+        help="Optional path for the RSS-landscape figure.",
+    )
 
     return parser.parse_args()
 
@@ -430,6 +466,7 @@ def main() -> None:
         reference_sound_speed=args.reference_sound_speed,
         n_grid=args.n_grid,
         top_n=args.top_n,
+        figure_path=args.figure,
     )
 
 

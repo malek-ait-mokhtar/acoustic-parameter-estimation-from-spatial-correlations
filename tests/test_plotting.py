@@ -9,12 +9,14 @@ import numpy as np
 from acoustic_estimation.estimation import (
     AnalysisResult,
     FrequencyEstimate,
+    LocalMinimum,
 )
 from acoustic_estimation.plotting import (
     closest_frequency_estimate,
     plot_coherence_mean,
     plot_mean_spectrum,
     plot_rss,
+    plot_rss_landscape,
     plot_sinc_comparison,
     plot_sinc_fit,
     plot_sound_speed,
@@ -174,6 +176,7 @@ def test_retained_band_plot_rejects_empty_band():
             max_frequency=1500.0,
         )
 
+
 def test_plot_mean_spectrum_can_limit_frequency_range():
     figure = plot_mean_spectrum(
         make_result(),
@@ -186,5 +189,37 @@ def test_plot_mean_spectrum_can_limit_frequency_range():
         axis.get_xlim(),
         (0.0, 600.0),
     )
+
+    plt.close(figure)
+
+
+def test_plot_rss_landscape_returns_figure():
+    k_grid = np.linspace(
+        1.0,
+        10.0,
+        100,
+    )
+
+    rss_grid = (
+        k_grid - 5.0
+    ) ** 2
+
+    minima = [
+        LocalMinimum(
+            wavenumber_rad_m=5.0,
+            rss=0.0,
+        )
+    ]
+
+    figure = plot_rss_landscape(
+        k_grid=k_grid,
+        rss_grid=rss_grid,
+        theoretical_wavenumber=5.2,
+        baseline_wavenumber=5.0,
+        local_minima=minima,
+        frequency=1500.0,
+    )
+
+    assert figure is not None
 
     plt.close(figure)

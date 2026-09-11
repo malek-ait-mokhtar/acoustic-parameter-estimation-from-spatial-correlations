@@ -11,6 +11,7 @@ from matplotlib.figure import Figure
 from acoustic_estimation.estimation import (
     AnalysisResult,
     FrequencyEstimate,
+    LocalMinimum,
 )
 from acoustic_estimation.models import spherical_sinc
 
@@ -489,5 +490,89 @@ def plot_sinc_fit(
     figure.tight_layout()
 
     _save_figure(figure, path)
+
+    return figure
+
+
+def plot_rss_landscape(
+    k_grid: np.ndarray,
+    rss_grid: np.ndarray,
+    theoretical_wavenumber: float,
+    baseline_wavenumber: float,
+    local_minima: list[LocalMinimum],
+    frequency: float,
+    top_n: int = 20,
+    path: str | Path | None = None,
+) -> Figure:
+    """Plot an RSS wavenumber landscape and its local minima."""
+    if top_n <= 0:
+        raise ValueError(
+            "top_n must be strictly positive"
+        )
+
+    figure, axis = plt.subplots(
+        figsize=(11, 5)
+    )
+
+    axis.plot(
+        k_grid,
+        rss_grid,
+        linewidth=1.5,
+        label="RSS(k)",
+    )
+
+    axis.axvline(
+        theoretical_wavenumber,
+        color="red",
+        linestyle="--",
+        linewidth=2,
+        label="Theoretical k",
+    )
+
+    axis.axvline(
+        baseline_wavenumber,
+        linestyle=":",
+        linewidth=2,
+        label="Baseline estimate",
+    )
+
+    for rank, minimum in enumerate(
+        local_minima[:top_n],
+        start=1,
+    ):
+        axis.scatter(
+            minimum.wavenumber_rad_m,
+            minimum.rss,
+            s=40,
+        )
+
+        axis.annotate(
+            str(rank),
+            (
+                minimum.wavenumber_rad_m,
+                minimum.rss,
+            ),
+            textcoords="offset points",
+            xytext=(5, 5),
+            fontsize=9,
+        )
+
+    axis.set_xlabel("k (rad/m)")
+    axis.set_ylabel("RSS")
+
+    axis.set_title(
+        "RSS objective versus wavenumber "
+        f"({frequency:.2f} Hz)"
+    )
+
+    axis.grid(True)
+    axis.legend()
+
+    figure.tight_layout()
+
+    _save_figure(
+        figure,
+        path,
+    )
 
     return figure
