@@ -23,7 +23,7 @@ from acoustic_estimation.plotting import (
     plot_rss,
     plot_sinc_comparison,
     plot_sound_speed,
-    plot_sound_speed_valid_band,
+    plot_sound_speed_retained_band,
 )
 from acoustic_estimation.results import save_analysis_result
 from acoustic_estimation.spectral import (
@@ -220,7 +220,7 @@ def save_primary_figures(
     in the final analysis:
 
     - sound-speed estimates over the complete analysed frequency range;
-    - sound-speed estimates over the 290-1500 Hz validity band;
+    - sound-speed estimates over the retained 290-1500 Hz frequency band;
     - comparison between measured, theoretical, and fitted spatial
       coherence near 500 Hz.
     """
@@ -237,12 +237,12 @@ def save_primary_figures(
             reference_sound_speed=reference_sound_speed,
             path=directory / "sound_speed_full.png",
         ),
-        plot_sound_speed_valid_band(
+        plot_sound_speed_retained_band(
             result,
             min_frequency=290.0,
             max_frequency=1500.0,
             reference_sound_speed=reference_sound_speed,
-            path=directory / "sound_speed_valid_band.png",
+            path=directory / "sound_speed_retained_band.png",
         ),
         plot_sinc_comparison(
             result,

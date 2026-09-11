@@ -18,7 +18,7 @@ from acoustic_estimation.plotting import (
     plot_sinc_comparison,
     plot_sinc_fit,
     plot_sound_speed,
-    plot_sound_speed_valid_band,
+    plot_sound_speed_retained_band,
 )
 
 
@@ -89,8 +89,8 @@ def test_plot_sound_speed_returns_figure():
     plt.close(figure)
 
 
-def test_plot_sound_speed_valid_band_returns_figure():
-    figure = plot_sound_speed_valid_band(
+def test_plot_sound_speed_retained_band_returns_figure():
+    figure = plot_sound_speed_retained_band(
         make_result(),
         min_frequency=400.0,
         max_frequency=600.0,
@@ -166,9 +166,9 @@ def test_plot_can_save_figure(tmp_path):
     plt.close(figure)
 
 
-def test_valid_band_plot_rejects_empty_band():
+def test_retained_band_plot_rejects_empty_band():
     with pytest.raises(ValueError):
-        plot_sound_speed_valid_band(
+        plot_sound_speed_retained_band(
             make_result(),
             min_frequency=1000.0,
             max_frequency=1500.0,

@@ -100,7 +100,7 @@ def plot_sound_speed(
     return figure
 
 
-def plot_sound_speed_valid_band(
+def plot_sound_speed_retained_band(
     result: AnalysisResult,
     min_frequency: float = 290.0,
     max_frequency: float = 1500.0,
@@ -108,7 +108,7 @@ def plot_sound_speed_valid_band(
     interval_ratio: float = 0.05,
     path: str | Path | None = None,
 ) -> Figure:
-    """Plot sound-speed estimates over the retained UMA16 validity band."""
+    """Plot sound-speed estimates over the retained UMA16 frequency band."""
     frequencies, sound_speeds, _ = _frequency_arrays(result)
 
     mask = (
@@ -118,7 +118,7 @@ def plot_sound_speed_valid_band(
 
     if not np.any(mask):
         raise ValueError(
-            "no frequency estimates lie inside the requested validity band"
+            "no frequency estimates lie inside the requested frequency band"
         )
 
     selected_frequencies = frequencies[mask]

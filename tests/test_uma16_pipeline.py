@@ -55,7 +55,7 @@ def test_save_primary_figures(tmp_path):
     ).is_file()
 
     assert (
-        tmp_path / "sound_speed_valid_band.png"
+        tmp_path / "sound_speed_retained_band.png"
     ).is_file()
 
     assert (
