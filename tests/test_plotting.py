@@ -28,6 +28,8 @@ from acoustic_estimation.plotting import (
     plot_rss_shape_estimators,
     plot_piecewise_affine_sound_speed,
     plot_second_derivative_sound_speed,
+    plot_array24_corrected_summary,
+    plot_uma16_retained_band_summary,
 )
 
 
@@ -448,3 +450,66 @@ def test_piecewise_sound_speed_plot_has_threshold_line():
     assert len(vertical_lines) == 1
 
     plt.close(figure)
+    
+
+def test_plot_uma16_retained_band_summary_returns_figure():
+    frequencies = np.array(
+        [100.0, 200.0, 300.0, 500.0, 1000.0, 1600.0]
+    )
+
+    speeds = np.array(
+        [150.0, 250.0, 320.0, 340.0, 350.0, 180.0]
+    )
+
+    figure = plot_uma16_retained_band_summary(
+        frequencies,
+        speeds,
+    )
+
+    assert figure is not None
+    assert len(figure.axes) == 1
+
+    axis = figure.axes[0]
+
+    estimate_line = axis.lines[0]
+
+    assert np.allclose(
+        estimate_line.get_xdata(),
+        [300.0, 500.0, 1000.0],
+    )
+
+    plt.close(
+        figure
+    )
+
+
+def test_plot_array24_corrected_summary_returns_figure():
+    frequencies = np.array(
+        [100.0, 150.0, 500.0, 2000.0]
+    )
+
+    speeds = np.array(
+        [250.0, 340.0, 350.0, 345.0]
+    )
+
+    figure = plot_array24_corrected_summary(
+        frequencies,
+        speeds,
+    )
+
+    assert figure is not None
+    assert len(figure.axes) == 1
+
+    axis = figure.axes[0]
+
+    estimate_line = axis.lines[0]
+
+    # Unlike UMA16, the complete curve remains displayed.
+    assert np.allclose(
+        estimate_line.get_xdata(),
+        frequencies,
+    )
+
+    plt.close(
+        figure
+    )

@@ -1365,3 +1365,370 @@ def plot_piecewise_affine_sound_speed(
     )
 
     return figure
+
+
+
+
+def plot_uma16_retained_band_summary(
+    frequencies_hz: np.ndarray,
+    sound_speed_m_s: np.ndarray,
+    max_frequency: float = 1500.0,
+    speed_threshold: float = 300.0,
+    reference_sound_speed: float = 343.0,
+    confidence_ratio: float = 0.05,
+    path: str | Path | None = None,
+) -> Figure:
+    """Plot the historical UMA16 retained-band sound-speed summary."""
+    frequencies_hz = np.asarray(
+        frequencies_hz,
+        dtype=np.float64,
+    )
+
+    sound_speed_m_s = np.asarray(
+        sound_speed_m_s,
+        dtype=np.float64,
+    )
+
+    if frequencies_hz.shape != sound_speed_m_s.shape:
+        raise ValueError(
+            "frequencies_hz and sound_speed_m_s "
+            "must have the same shape"
+        )
+
+    if frequencies_hz.ndim != 1:
+        raise ValueError(
+            "inputs must be one-dimensional"
+        )
+
+    if frequencies_hz.size == 0:
+        raise ValueError(
+            "at least one estimate is required"
+        )
+
+    if max_frequency <= 0:
+        raise ValueError(
+            "max_frequency must be strictly positive"
+        )
+
+    if reference_sound_speed <= 0:
+        raise ValueError(
+            "reference_sound_speed must be strictly positive"
+        )
+
+    if not 0.0 < confidence_ratio < 1.0:
+        raise ValueError(
+            "confidence_ratio must lie strictly between 0 and 1"
+        )
+
+    order = np.argsort(
+        frequencies_hz
+    )
+
+    frequencies = frequencies_hz[
+        order
+    ]
+
+    speeds = sound_speed_m_s[
+        order
+    ]
+
+    above_threshold = (
+        speeds > speed_threshold
+    )
+
+    if not np.any(
+        above_threshold
+    ):
+        raise ValueError(
+            "no sound-speed estimate exceeds speed_threshold"
+        )
+
+    first_index = int(
+        np.argmax(
+            above_threshold
+        )
+    )
+
+    min_frequency = float(
+        frequencies[first_index]
+    )
+
+    retained_mask = (
+        (frequencies >= min_frequency)
+        & (frequencies <= max_frequency)
+    )
+
+    if not np.any(
+        retained_mask
+    ):
+        raise ValueError(
+            "the retained frequency band is empty"
+        )
+
+    retained_frequencies = frequencies[
+        retained_mask
+    ]
+
+    retained_speeds = speeds[
+        retained_mask
+    ]
+
+    mean_speed = float(
+        np.mean(
+            retained_speeds
+        )
+    )
+
+    confidence_low = (
+        mean_speed
+        * (1.0 - confidence_ratio)
+    )
+
+    confidence_high = (
+        mean_speed
+        * (1.0 + confidence_ratio)
+    )
+
+    figure, axis = plt.subplots(
+        figsize=(8, 5)
+    )
+
+    axis.plot(
+        retained_frequencies,
+        retained_speeds,
+        "o-",
+        label="Estimates",
+    )
+
+    axis.axhline(
+        reference_sound_speed,
+        color="red",
+        linestyle="--",
+        linewidth=2,
+        label=(
+            "Theoretical sound speed "
+            f"= {reference_sound_speed:.0f} m/s"
+        ),
+    )
+
+    axis.axhline(
+        mean_speed,
+        color="green",
+        linestyle="--",
+        linewidth=2,
+        label=(
+            f"Mean = {mean_speed:.2f} m/s"
+        ),
+    )
+
+    axis.fill_between(
+        retained_frequencies,
+        confidence_low,
+        confidence_high,
+        color="limegreen",
+        alpha=0.20,
+        label=(
+            f"±{int(confidence_ratio * 100)}% interval "
+            f"({confidence_low:.2f}–"
+            f"{confidence_high:.2f} m/s)"
+        ),
+    )
+
+    axis.set_xlabel(
+        "Frequency (Hz)"
+    )
+
+    axis.set_ylabel(
+        "Estimated sound speed (m/s)"
+    )
+
+    axis.set_title(
+        "Estimated sound speed "
+        f"from {min_frequency:.2f} Hz "
+        f"to {max_frequency:.0f} Hz"
+    )
+
+    axis.grid(True)
+    axis.legend()
+
+    figure.tight_layout()
+
+    _save_figure(
+        figure,
+        path,
+    )
+
+    return figure
+
+def plot_array24_corrected_summary(
+    frequencies_hz: np.ndarray,
+    corrected_sound_speed_m_s: np.ndarray,
+    min_average_frequency: float = 140.0,
+    reference_sound_speed: float = 347.0,
+    confidence_ratio: float = 0.05,
+    path: str | Path | None = None,
+) -> Figure:
+    """Plot the historical array24 globally corrected sound-speed summary."""
+    frequencies_hz = np.asarray(
+        frequencies_hz,
+        dtype=np.float64,
+    )
+
+    corrected_sound_speed_m_s = np.asarray(
+        corrected_sound_speed_m_s,
+        dtype=np.float64,
+    )
+
+    if (
+        frequencies_hz.shape
+        != corrected_sound_speed_m_s.shape
+    ):
+        raise ValueError(
+            "frequencies_hz and corrected_sound_speed_m_s "
+            "must have the same shape"
+        )
+
+    if frequencies_hz.ndim != 1:
+        raise ValueError(
+            "inputs must be one-dimensional"
+        )
+
+    if frequencies_hz.size == 0:
+        raise ValueError(
+            "at least one estimate is required"
+        )
+
+    if min_average_frequency < 0:
+        raise ValueError(
+            "min_average_frequency must be non-negative"
+        )
+
+    if reference_sound_speed <= 0:
+        raise ValueError(
+            "reference_sound_speed must be strictly positive"
+        )
+
+    if not 0.0 < confidence_ratio < 1.0:
+        raise ValueError(
+            "confidence_ratio must lie strictly between 0 and 1"
+        )
+
+    order = np.argsort(
+        frequencies_hz
+    )
+
+    frequencies = frequencies_hz[
+        order
+    ]
+
+    corrected_speeds = corrected_sound_speed_m_s[
+        order
+    ]
+
+    average_mask = (
+        frequencies
+        >= min_average_frequency
+    )
+
+    if not np.any(
+        average_mask
+    ):
+        raise ValueError(
+            "no frequencies lie inside the averaging band"
+        )
+
+    mean_speed = float(
+        np.mean(
+            corrected_speeds[
+                average_mask
+            ]
+        )
+    )
+
+    confidence_low = (
+        mean_speed
+        * (1.0 - confidence_ratio)
+    )
+
+    confidence_high = (
+        mean_speed
+        * (1.0 + confidence_ratio)
+    )
+
+    figure, axis = plt.subplots(
+        figsize=(10, 6)
+    )
+
+    # Historical Figure 22 keeps the complete corrected curve visible.
+    axis.plot(
+        frequencies,
+        corrected_speeds,
+        "o-",
+        linewidth=2.0,
+        markersize=4,
+        label="Corrected sound speed",
+    )
+
+    axis.axhline(
+        reference_sound_speed,
+        color="red",
+        linestyle="--",
+        linewidth=2,
+        label=(
+            "Theoretical sound speed "
+            f"({reference_sound_speed:.0f} m/s)"
+        ),
+    )
+
+    axis.axhline(
+        mean_speed,
+        color="green",
+        linestyle="--",
+        linewidth=2,
+        label=(
+            f"Mean for f ≥ "
+            f"{min_average_frequency:.0f} Hz: "
+            f"{mean_speed:.2f} m/s"
+        ),
+    )
+
+    axis.fill_between(
+        frequencies,
+        confidence_low,
+        confidence_high,
+        where=average_mask,
+        color="green",
+        alpha=0.18,
+        label=(
+            f"±{int(confidence_ratio * 100)}% interval: "
+            f"[{confidence_low:.2f}, "
+            f"{confidence_high:.2f}] m/s"
+        ),
+    )
+
+    axis.set_xlabel(
+        "Frequency (Hz)"
+    )
+
+    axis.set_ylabel(
+        "Estimated sound speed (m/s)"
+    )
+
+    axis.set_title(
+        "Estimated sound speed versus frequency"
+    )
+
+    axis.grid(True)
+
+    axis.legend(
+        loc="lower left"
+    )
+
+    figure.tight_layout()
+
+    _save_figure(
+        figure,
+        path,
+    )
+
+    return figure
