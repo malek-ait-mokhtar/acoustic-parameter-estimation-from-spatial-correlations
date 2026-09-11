@@ -5,6 +5,7 @@ from acoustic_estimation.spectral import (
     average_spectrum,
     coherence_matrix,
     cross_spectral_matrices,
+    select_frequency_bins,
 )
 
 
@@ -112,7 +113,6 @@ def test_identical_channels_have_unit_coherence():
         nperseg=256,
     )
 
-    # Avoid DC/Nyquist edge cases: test a regular interior bin.
     gamma = coherence_matrix(csms[20])
 
     assert np.allclose(
@@ -179,4 +179,70 @@ def test_cross_spectral_rejects_invalid_overlap(overlap):
             sample_rate=1000.0,
             nperseg=256,
             overlap=overlap,
+        )
+
+
+def test_select_frequency_bins():
+    spectrum_frequencies = np.array(
+        [0.0, 100.0, 200.0, 300.0, 400.0]
+    )
+
+    mean_spectrum = np.array(
+        [0.0, 1.0, 10.0, 2.0, 0.0]
+    )
+
+    csm_frequencies = spectrum_frequencies.copy()
+
+    indices = select_frequency_bins(
+        spectrum_frequencies,
+        mean_spectrum,
+        csm_frequencies,
+        min_frequency=50.0,
+        max_frequency=350.0,
+        relative_threshold=0.15,
+    )
+
+    assert np.array_equal(
+        indices,
+        np.array([2, 3]),
+    )
+
+
+def test_select_frequency_bins_respects_frequency_range():
+    frequencies = np.array(
+        [0.0, 100.0, 200.0, 300.0, 400.0]
+    )
+
+    spectrum = np.ones(5)
+
+    indices = select_frequency_bins(
+        frequencies,
+        spectrum,
+        frequencies,
+        min_frequency=150.0,
+        max_frequency=350.0,
+        relative_threshold=0.0,
+    )
+
+    assert np.array_equal(
+        indices,
+        np.array([2, 3]),
+    )
+
+
+@pytest.mark.parametrize(
+    "threshold",
+    [-0.1, 1.1],
+)
+def test_select_frequency_bins_rejects_invalid_threshold(
+    threshold,
+):
+    frequencies = np.arange(5, dtype=float)
+
+    with pytest.raises(ValueError):
+        select_frequency_bins(
+            frequencies,
+            np.ones(5),
+            frequencies,
+            relative_threshold=threshold,
         )

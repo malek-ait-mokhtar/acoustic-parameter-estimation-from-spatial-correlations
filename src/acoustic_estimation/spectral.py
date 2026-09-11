@@ -254,3 +254,60 @@ def coherence_matrix(
         csm / (denominator + eps),
         dtype=np.complex128,
     )
+    
+    
+def select_frequency_bins(
+    spectrum_frequencies: ArrayLike,
+    mean_spectrum: ArrayLike,
+    csm_frequencies: ArrayLike,
+    min_frequency: float = 50.0,
+    max_frequency: float = 3000.0,
+    relative_threshold: float = 0.03,
+) -> NDArray[np.int64]:
+    """Select energetic CSM frequency bins inside an analysis band."""
+    spectrum_frequencies = np.asarray(
+        spectrum_frequencies,
+        dtype=np.float64,
+    )
+    mean_spectrum = np.asarray(
+        mean_spectrum,
+        dtype=np.float64,
+    )
+    csm_frequencies = np.asarray(
+        csm_frequencies,
+        dtype=np.float64,
+    )
+
+    if spectrum_frequencies.shape != mean_spectrum.shape:
+        raise ValueError(
+            "spectrum_frequencies and mean_spectrum must have the same shape"
+        )
+
+    if min_frequency < 0:
+        raise ValueError("min_frequency must be non-negative")
+
+    if max_frequency <= min_frequency:
+        raise ValueError(
+            "max_frequency must be greater than min_frequency"
+        )
+
+    if not 0.0 <= relative_threshold <= 1.0:
+        raise ValueError(
+            "relative_threshold must lie between 0 and 1"
+        )
+
+    threshold = relative_threshold * np.max(mean_spectrum)
+
+    interpolated_spectrum = np.interp(
+        csm_frequencies,
+        spectrum_frequencies,
+        mean_spectrum,
+    )
+
+    mask = (
+        (csm_frequencies >= min_frequency)
+        & (csm_frequencies <= max_frequency)
+        & (interpolated_spectrum > threshold)
+    )
+
+    return np.flatnonzero(mask)

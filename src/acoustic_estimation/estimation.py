@@ -22,6 +22,15 @@ class FrequencyEstimate:
     distances_m: NDArray[np.float64]
     observed_coherence: NDArray[np.float64]
 
+@dataclass
+class AnalysisResult:
+    """Results of a frequency-domain acoustic parameter analysis."""
+
+    estimates: list[FrequencyEstimate]
+    sample_rate_hz: float
+    n_channels: int
+    n_samples: int
+    n_snapshots: int
 
 def build_pairwise_dataset(
     coherence: ArrayLike,
