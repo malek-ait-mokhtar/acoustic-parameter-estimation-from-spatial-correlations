@@ -2,11 +2,25 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy.optimize import minimize_scalar
 
 from acoustic_estimation.models import spherical_sinc
+
+
+@dataclass
+class FrequencyEstimate:
+    """Estimated acoustic parameters and pairwise fit data at one frequency."""
+
+    frequency_hz: float
+    wavenumber_rad_m: float
+    sound_speed_m_s: float
+    rss: float
+    distances_m: NDArray[np.float64]
+    observed_coherence: NDArray[np.float64]
 
 
 def build_pairwise_dataset(
