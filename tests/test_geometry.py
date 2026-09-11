@@ -8,6 +8,14 @@ from acoustic_estimation.geometry import (
     uma16_positions,
 )
 
+from acoustic_estimation.geometry import (
+    distinct_distance_count,
+    optimize_array24_geometry,
+    orthogonal_array_distances,
+    orthogonal_array_positions,
+    random_axis_positions,
+)
+
 
 def test_uma16_shape():
     positions = uma16_positions()
@@ -94,3 +102,137 @@ def test_distance_multiplicities_account_for_all_pairs():
     _, counts = distance_multiplicities(positions)
 
     assert counts.sum() == 120
+    
+    
+def test_random_axis_positions_respects_constraints():
+    rng = np.random.default_rng(
+        42
+    )
+
+    positions = random_axis_positions(
+        length_cm=120,
+        rng=rng,
+    )
+
+    assert positions.shape == (8,)
+
+    spacing = np.diff(
+        positions
+    )
+
+    assert np.all(
+        spacing >= 2
+    )
+
+    assert np.all(
+        spacing <= 15
+    )
+
+    assert positions[0] <= 15
+
+    assert (
+        120 - positions[-1]
+        <= 15
+    )
+    
+def test_orthogonal_array_has_276_pairwise_distances():
+    x = np.array(
+        [15, 30, 38, 48, 60, 75, 90, 105]
+    )
+
+    y = np.array(
+        [14, 28, 43, 58, 73, 88, 98, 108]
+    )
+
+    z = np.array(
+        [13, 26, 37, 52, 64, 79, 93, 106]
+    )
+
+    distances = (
+        orthogonal_array_distances(
+            x,
+            y,
+            z,
+        )
+    )
+
+    assert distances.shape == (
+        276,
+    )
+    
+def test_historical_array24_geometry_has_expected_distinct_distances():
+    x = np.array(
+        [15, 30, 38, 48, 60, 75, 90, 105]
+    )
+
+    y = np.array(
+        [14, 28, 43, 58, 73, 88, 98, 108]
+    )
+
+    z = np.array(
+        [13, 26, 37, 52, 64, 79, 93, 106]
+    )
+
+    count = distinct_distance_count(
+        x,
+        y,
+        z,
+    )
+
+    assert count == 239
+    
+def test_orthogonal_positions_match_array24_geometry():
+    x = np.array(
+        [15, 30, 38, 48, 60, 75, 90, 105]
+    )
+
+    y = np.array(
+        [14, 28, 43, 58, 73, 88, 98, 108]
+    )
+
+    z = np.array(
+        [13, 26, 37, 52, 64, 79, 93, 106]
+    )
+
+    positions = orthogonal_array_positions(
+        x,
+        y,
+        z,
+        scale=0.01,
+    )
+
+    assert np.allclose(
+        positions,
+        array24_positions(),
+    )
+    
+def test_array24_geometry_search_is_reproducible():
+    first = optimize_array24_geometry(
+        n_iterations=20,
+        seed=1234,
+    )
+
+    second = optimize_array24_geometry(
+        n_iterations=20,
+        seed=1234,
+    )
+
+    assert (
+        first.distinct_distance_count
+        == second.distinct_distance_count
+    )
+
+    assert np.array_equal(
+        first.x_cm,
+        second.x_cm,
+    )
+
+    assert np.array_equal(
+        first.y_cm,
+        second.y_cm,
+    )
+
+    assert np.array_equal(
+        first.z_cm,
+        second.z_cm,
+    )
