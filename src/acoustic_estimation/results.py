@@ -15,8 +15,8 @@ def save_analysis_result(
 ) -> None:
     """Save an acoustic analysis result as a compressed NumPy archive.
 
-    The archive contains scalar acquisition metadata, estimated acoustic
-    parameters for every retained frequency, and the pairwise fit data needed
+    The archive contains acquisition metadata, estimated acoustic parameters,
+    mean coherence values, the mean spectrum, and the pairwise fit data needed
     to reconstruct the RSS objective without reprocessing the raw recordings.
 
     Parameters
@@ -39,6 +39,10 @@ def save_analysis_result(
 
     estimates = result.estimates
 
+    # ------------------------------------------------------------------
+    # Frequency-dependent estimated quantities.
+    # ------------------------------------------------------------------
+
     frequencies = np.array(
         [estimate.frequency_hz for estimate in estimates],
         dtype=np.float64,
@@ -59,16 +63,28 @@ def save_analysis_result(
         dtype=np.float64,
     )
 
+    coherence_mean = np.array(
+        [estimate.coherence_mean for estimate in estimates],
+        dtype=np.float64,
+    )
+
+    # ------------------------------------------------------------------
+    # Pairwise data required to reconstruct RSS(k).
+    # ------------------------------------------------------------------
+
     if estimates:
         distances = np.stack(
-            [estimate.distances_m for estimate in estimates],
+            [
+                estimate.distances_m
+                for estimate in estimates
+            ]
         )
 
         observed_coherence = np.stack(
             [
                 estimate.observed_coherence
                 for estimate in estimates
-            ],
+            ]
         )
     else:
         distances = np.empty(
@@ -81,18 +97,23 @@ def save_analysis_result(
             dtype=np.float64,
         )
 
+    # ------------------------------------------------------------------
+    # Persist the complete processed result without Python pickling.
+    # ------------------------------------------------------------------
+
     np.savez_compressed(
-    path,
-    frequency_hz=frequencies,
-    wavenumber_rad_m=wavenumbers,
-    sound_speed_m_s=sound_speeds,
-    rss=rss,
-    distances_m=distances,
-    observed_coherence=observed_coherence,
-    spectrum_frequencies_hz=result.spectrum_frequencies_hz,
-    mean_spectrum=result.mean_spectrum,
-    sample_rate_hz=np.float64(result.sample_rate_hz),
-    n_channels=np.int64(result.n_channels),
-    n_samples=np.int64(result.n_samples),
-    n_snapshots=np.int64(result.n_snapshots),
-)
+        path,
+        frequency_hz=frequencies,
+        wavenumber_rad_m=wavenumbers,
+        sound_speed_m_s=sound_speeds,
+        rss=rss,
+        coherence_mean=coherence_mean,
+        distances_m=distances,
+        observed_coherence=observed_coherence,
+        spectrum_frequencies_hz=result.spectrum_frequencies_hz,
+        mean_spectrum=result.mean_spectrum,
+        sample_rate_hz=np.float64(result.sample_rate_hz),
+        n_channels=np.int64(result.n_channels),
+        n_samples=np.int64(result.n_samples),
+        n_snapshots=np.int64(result.n_snapshots),
+    )

@@ -19,6 +19,7 @@ class FrequencyEstimate:
     wavenumber_rad_m: float
     sound_speed_m_s: float
     rss: float
+    coherence_mean: float
     distances_m: NDArray[np.float64]
     observed_coherence: NDArray[np.float64]
 

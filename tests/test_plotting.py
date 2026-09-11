@@ -1,3 +1,4 @@
+import pytest
 import matplotlib
 
 matplotlib.use("Agg")
@@ -11,30 +12,44 @@ from acoustic_estimation.estimation import (
 )
 from acoustic_estimation.plotting import (
     closest_frequency_estimate,
+    plot_coherence_mean,
     plot_mean_spectrum,
     plot_rss,
+    plot_sinc_comparison,
     plot_sinc_fit,
     plot_sound_speed,
+    plot_sound_speed_valid_band,
 )
 
 
-def make_result():
+def make_result() -> AnalysisResult:
+    """Create a small synthetic analysis result for plotting tests."""
     estimates = [
         FrequencyEstimate(
             frequency_hz=490.0,
             wavenumber_rad_m=9.0,
             sound_speed_m_s=342.1,
             rss=0.3,
-            distances_m=np.array([0.04, 0.08, 0.12]),
-            observed_coherence=np.array([0.98, 0.91, 0.80]),
+            coherence_mean=0.85,
+            distances_m=np.array(
+                [0.04, 0.08, 0.12]
+            ),
+            observed_coherence=np.array(
+                [0.98, 0.91, 0.80]
+            ),
         ),
         FrequencyEstimate(
             frequency_hz=510.0,
             wavenumber_rad_m=9.4,
             sound_speed_m_s=340.9,
             rss=0.4,
-            distances_m=np.array([0.04, 0.08, 0.12]),
-            observed_coherence=np.array([0.97, 0.90, 0.78]),
+            coherence_mean=0.82,
+            distances_m=np.array(
+                [0.04, 0.08, 0.12]
+            ),
+            observed_coherence=np.array(
+                [0.97, 0.90, 0.78]
+            ),
         ),
     ]
 
@@ -65,7 +80,21 @@ def test_closest_frequency_estimate():
 
 
 def test_plot_sound_speed_returns_figure():
-    figure = plot_sound_speed(make_result())
+    figure = plot_sound_speed(
+        make_result()
+    )
+
+    assert figure is not None
+
+    plt.close(figure)
+
+
+def test_plot_sound_speed_valid_band_returns_figure():
+    figure = plot_sound_speed_valid_band(
+        make_result(),
+        min_frequency=400.0,
+        max_frequency=600.0,
+    )
 
     assert figure is not None
 
@@ -73,7 +102,20 @@ def test_plot_sound_speed_returns_figure():
 
 
 def test_plot_rss_returns_figure():
-    figure = plot_rss(make_result())
+    figure = plot_rss(
+        make_result()
+    )
+
+    assert figure is not None
+
+    plt.close(figure)
+
+
+def test_plot_sinc_comparison_returns_figure():
+    figure = plot_sinc_comparison(
+        make_result(),
+        target_frequency=500.0,
+    )
 
     assert figure is not None
 
@@ -91,8 +133,20 @@ def test_plot_sinc_fit_returns_figure():
     plt.close(figure)
 
 
+def test_plot_coherence_mean_returns_figure():
+    figure = plot_coherence_mean(
+        make_result()
+    )
+
+    assert figure is not None
+
+    plt.close(figure)
+
+
 def test_plot_mean_spectrum_returns_figure():
-    figure = plot_mean_spectrum(make_result())
+    figure = plot_mean_spectrum(
+        make_result()
+    )
 
     assert figure is not None
 
@@ -108,5 +162,29 @@ def test_plot_can_save_figure(tmp_path):
     )
 
     assert path.is_file()
+
+    plt.close(figure)
+
+
+def test_valid_band_plot_rejects_empty_band():
+    with pytest.raises(ValueError):
+        plot_sound_speed_valid_band(
+            make_result(),
+            min_frequency=1000.0,
+            max_frequency=1500.0,
+        )
+
+def test_plot_mean_spectrum_can_limit_frequency_range():
+    figure = plot_mean_spectrum(
+        make_result(),
+        max_frequency=600.0,
+    )
+
+    axis = figure.axes[0]
+
+    assert np.allclose(
+        axis.get_xlim(),
+        (0.0, 600.0),
+    )
 
     plt.close(figure)

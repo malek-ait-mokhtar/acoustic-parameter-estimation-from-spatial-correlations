@@ -13,6 +13,7 @@ def test_save_analysis_result(tmp_path):
         wavenumber_rad_m=9.0,
         sound_speed_m_s=349.0,
         rss=0.25,
+        coherence_mean=0.85,
         distances_m=np.array([0.04, 0.08]),
         observed_coherence=np.array([0.9, 0.7]),
     )
@@ -59,6 +60,11 @@ def test_save_analysis_result(tmp_path):
     assert np.allclose(
         data["rss"],
         [0.25],
+    )
+
+    assert np.allclose(
+        data["coherence_mean"],
+        [0.85],
     )
 
     # Pairwise data required to reconstruct RSS(k)

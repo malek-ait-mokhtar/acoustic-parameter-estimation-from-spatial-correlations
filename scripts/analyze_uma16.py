@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 from acoustic_estimation.estimation import (
     AnalysisResult,
@@ -17,10 +18,12 @@ from acoustic_estimation.estimation import (
 from acoustic_estimation.geometry import uma16_positions
 from acoustic_estimation.io import load_wav_array
 from acoustic_estimation.plotting import (
+    plot_coherence_mean,
     plot_mean_spectrum,
     plot_rss,
-    plot_sinc_fit,
+    plot_sinc_comparison,
     plot_sound_speed,
+    plot_sound_speed_valid_band,
 )
 from acoustic_estimation.results import save_analysis_result
 from acoustic_estimation.spectral import (
@@ -122,6 +125,20 @@ def analyze_uma16(
             csms[index]
         )
 
+        # Mean magnitude of the off-diagonal spatial coherence terms.
+        off_diagonal = ~np.eye(
+            gamma.shape[0],
+            dtype=bool,
+        )
+
+        coherence_mean = float(
+            np.mean(
+                np.abs(
+                    gamma[off_diagonal]
+                )
+            )
+        )
+
         distances, observed_coherence = build_pairwise_dataset(
             gamma,
             positions,
@@ -145,6 +162,7 @@ def analyze_uma16(
                 wavenumber_rad_m=wavenumber,
                 sound_speed_m_s=sound_speed,
                 rss=rss,
+                coherence_mean=coherence_mean,
                 distances_m=distances,
                 observed_coherence=observed_coherence,
             )
@@ -191,27 +209,20 @@ def print_summary(
         )
 
 
-def save_standard_figures(
+def save_primary_figures(
     result: AnalysisResult,
     directory: str | Path,
     reference_sound_speed: float = 343.0,
-    relative_threshold: float = 0.03,
-    fit_frequency: float = 500.0,
 ) -> None:
-    """Generate and save the standard UMA16 analysis figures.
+    """Generate and save the primary UMA16 result figures.
 
-    Parameters
-    ----------
-    result
-        Complete analysis result.
-    directory
-        Directory in which figures are saved.
-    reference_sound_speed
-        Reference sound speed displayed on the sound-speed figure.
-    relative_threshold
-        Relative spectral threshold displayed on the spectrum figure.
-    fit_frequency
-        Target frequency used for the spatial-coherence fit figure.
+    The primary figures correspond to the main scientific results retained
+    in the final analysis:
+
+    - sound-speed estimates over the complete analysed frequency range;
+    - sound-speed estimates over the 290-1500 Hz validity band;
+    - comparison between measured, theoretical, and fitted spatial
+      coherence near 500 Hz.
     """
     directory = Path(directory)
 
@@ -224,20 +235,54 @@ def save_standard_figures(
         plot_sound_speed(
             result,
             reference_sound_speed=reference_sound_speed,
-            path=directory / "sound_speed.png",
+            path=directory / "sound_speed_full.png",
         ),
+        plot_sound_speed_valid_band(
+            result,
+            min_frequency=290.0,
+            max_frequency=1500.0,
+            reference_sound_speed=reference_sound_speed,
+            path=directory / "sound_speed_valid_band.png",
+        ),
+        plot_sinc_comparison(
+            result,
+            target_frequency=500.0,
+            reference_sound_speed=reference_sound_speed,
+            path=directory / "sinc_comparison_500hz.png",
+        ),
+    ]
+
+    for figure in figures:
+        plt.close(figure)
+
+
+def save_diagnostic_figures(
+    result: AnalysisResult,
+    directory: str | Path,
+    relative_threshold: float = 0.03,
+    max_frequency: float = 3000.0,
+) -> None:
+    """Generate and save secondary UMA16 diagnostic figures."""
+    directory = Path(directory)
+
+    directory.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    figures = [
         plot_rss(
             result,
-            path=directory / "rss.png",
+            path=directory / "rss_vs_frequency.png",
         ),
-        plot_sinc_fit(
+        plot_coherence_mean(
             result,
-            target_frequency=fit_frequency,
-            path=directory / "sinc_fit_500hz.png",
+            path=directory / "coherence_vs_frequency.png",
         ),
         plot_mean_spectrum(
             result,
             relative_threshold=relative_threshold,
+            max_frequency=max_frequency,
             path=directory / "mean_spectrum.png",
         ),
     ]
@@ -307,8 +352,17 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help=(
-            "Optional directory in which standard analysis "
+            "Optional directory in which the primary analysis "
             "figures are saved."
+        ),
+    )
+
+    parser.add_argument(
+        "--diagnostics",
+        action="store_true",
+        help=(
+            "Also generate secondary diagnostic figures. "
+            "Requires --figures-dir."
         ),
     )
 
@@ -319,6 +373,11 @@ def main() -> None:
     """Run the UMA16 analysis from the command line."""
     args = parse_args()
 
+    if args.diagnostics and args.figures_dir is None:
+        raise ValueError(
+            "--diagnostics requires --figures-dir"
+        )
+
     result = analyze_uma16(
         data_directory=args.data_directory,
         min_frequency=args.min_frequency,
@@ -328,6 +387,10 @@ def main() -> None:
     )
 
     print_summary(result)
+
+    # ------------------------------------------------------------------
+    # Processed numerical results.
+    # ------------------------------------------------------------------
 
     if args.output is not None:
         save_analysis_result(
@@ -343,15 +406,37 @@ def main() -> None:
         print()
         print(f"Results saved to: {output_path}")
 
+    # ------------------------------------------------------------------
+    # Primary and optional diagnostic figures.
+    # ------------------------------------------------------------------
+
     if args.figures_dir is not None:
-        save_standard_figures(
+        save_primary_figures(
             result,
             directory=args.figures_dir,
             reference_sound_speed=args.reference_sound_speed,
-            relative_threshold=args.threshold,
         )
 
-        print(f"Figures saved to: {args.figures_dir}")
+        print(
+            f"Primary figures saved to: "
+            f"{args.figures_dir}"
+        )
+
+        if args.diagnostics:
+            diagnostics_directory = (
+                args.figures_dir / "diagnostics"
+            )
+
+            save_diagnostic_figures(
+                result,
+                directory=diagnostics_directory,
+                relative_threshold=args.threshold,
+            )
+
+            print(
+                f"Diagnostic figures saved to: "
+                f"{diagnostics_directory}"
+            )
 
 
 if __name__ == "__main__":
