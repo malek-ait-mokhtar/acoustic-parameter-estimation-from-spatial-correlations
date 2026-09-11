@@ -30,6 +30,12 @@ from acoustic_estimation.plotting import (
     plot_second_derivative_sound_speed,
     plot_array24_corrected_summary,
     plot_uma16_retained_band_summary,
+    plot_gp_measured_magnitude,
+    plot_gp_prediction_vs_measurement,
+    plot_gp_predictive_uncertainty,
+    plot_gp_reconstructed_magnitude,
+    plot_gp_reconstructed_real,
+    plot_gp_spatial_error_map,
 )
 
 
@@ -513,3 +519,117 @@ def test_plot_array24_corrected_summary_returns_figure():
     plt.close(
         figure
     )
+    
+    
+def make_gp_plot_data():
+    """Create small synthetic data for GP plotting tests."""
+    positions = np.array(
+        [
+            [0.00, 0.00],
+            [0.04, 0.00],
+            [0.00, 0.04],
+            [0.04, 0.04],
+        ]
+    )
+
+    pressures = np.array(
+        [
+            0.20 + 0.10j,
+            0.30 - 0.10j,
+            0.15 + 0.05j,
+            0.25 + 0.02j,
+        ]
+    )
+
+    coordinates = np.linspace(
+        -0.05,
+        0.10,
+        10,
+    )
+
+    mean_field = np.full(
+        (10, 10),
+        0.20 + 0.10j,
+        dtype=np.complex128,
+    )
+
+    variance = np.full(
+        (10, 10),
+        0.01,
+        dtype=np.float64,
+    )
+
+    predicted = (
+        0.9 * pressures
+    )
+
+    errors = np.abs(
+        predicted
+        - pressures
+    )
+
+    return (
+        positions,
+        pressures,
+        coordinates,
+        mean_field,
+        variance,
+        predicted,
+        errors,
+    )
+
+
+def test_gp_historical_plots_return_figures():
+    (
+        positions,
+        pressures,
+        coordinates,
+        mean_field,
+        variance,
+        predicted,
+        errors,
+    ) = make_gp_plot_data()
+
+    figures = [
+        plot_gp_measured_magnitude(
+            positions,
+            pressures,
+            500.65,
+        ),
+        plot_gp_reconstructed_magnitude(
+            mean_field,
+            positions,
+            coordinates,
+            coordinates,
+            500.65,
+        ),
+        plot_gp_reconstructed_real(
+            mean_field,
+            positions,
+            coordinates,
+            coordinates,
+        ),
+        plot_gp_predictive_uncertainty(
+            variance,
+            positions,
+            coordinates,
+            coordinates,
+        ),
+        plot_gp_prediction_vs_measurement(
+            pressures,
+            predicted,
+            500.65,
+        ),
+        plot_gp_spatial_error_map(
+            positions,
+            errors,
+            500.65,
+        ),
+    ]
+
+    for figure in figures:
+        assert figure is not None
+
+        plt.close(
+            figure
+        )

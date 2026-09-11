@@ -1732,3 +1732,358 @@ def plot_array24_corrected_summary(
     )
 
     return figure
+
+
+
+
+def plot_gp_measured_magnitude(
+    microphone_positions: np.ndarray,
+    pressures: np.ndarray,
+    frequency: float,
+    path: str | Path | None = None,
+) -> Figure:
+    """Plot measured pressure magnitude at the microphones."""
+    figure, axis = plt.subplots(
+        figsize=(7, 6)
+    )
+
+    scatter = axis.scatter(
+        microphone_positions[:, 0],
+        microphone_positions[:, 1],
+        c=np.abs(pressures),
+        s=150,
+        cmap="viridis",
+        edgecolors="black",
+    )
+
+    figure.colorbar(
+        scatter,
+        ax=axis,
+        label="Measured |P|",
+    )
+
+    axis.set_xlabel("x (m)")
+    axis.set_ylabel("y (m)")
+
+    axis.set_title(
+        "Measured magnitude at microphones "
+        f"- {frequency:.1f} Hz"
+    )
+
+    axis.set_aspect(
+        "equal",
+        adjustable="box",
+    )
+
+    figure.tight_layout()
+
+    _save_figure(
+        figure,
+        path,
+    )
+
+    return figure
+
+
+def plot_gp_reconstructed_magnitude(
+    mean_field: np.ndarray,
+    microphone_positions: np.ndarray,
+    x_coordinates: np.ndarray,
+    y_coordinates: np.ndarray,
+    frequency: float,
+    path: str | Path | None = None,
+) -> Figure:
+    """Plot the magnitude of the reconstructed GP field."""
+    extent = [
+        float(x_coordinates[0]),
+        float(x_coordinates[-1]),
+        float(y_coordinates[0]),
+        float(y_coordinates[-1]),
+    ]
+
+    figure, axis = plt.subplots(
+        figsize=(7, 6)
+    )
+
+    image = axis.imshow(
+        np.abs(mean_field),
+        origin="lower",
+        extent=extent,
+        cmap="viridis",
+        aspect="auto",
+    )
+
+    axis.scatter(
+        microphone_positions[:, 0],
+        microphone_positions[:, 1],
+        c="red",
+        s=45,
+    )
+
+    figure.colorbar(
+        image,
+        ax=axis,
+        label="Reconstructed |P|",
+    )
+
+    axis.set_xlabel("x (m)")
+    axis.set_ylabel("y (m)")
+
+    axis.set_title(
+        f"Reconstructed field - {frequency:.1f} Hz"
+    )
+
+    figure.tight_layout()
+
+    _save_figure(
+        figure,
+        path,
+    )
+
+    return figure
+
+
+def plot_gp_reconstructed_real(
+    mean_field: np.ndarray,
+    microphone_positions: np.ndarray,
+    x_coordinates: np.ndarray,
+    y_coordinates: np.ndarray,
+    path: str | Path | None = None,
+) -> Figure:
+    """Plot the real part of the reconstructed complex pressure."""
+    extent = [
+        float(x_coordinates[0]),
+        float(x_coordinates[-1]),
+        float(y_coordinates[0]),
+        float(y_coordinates[-1]),
+    ]
+
+    figure, axis = plt.subplots(
+        figsize=(7, 6)
+    )
+
+    image = axis.imshow(
+        np.real(mean_field),
+        origin="lower",
+        extent=extent,
+        cmap="coolwarm",
+        aspect="auto",
+    )
+
+    axis.scatter(
+        microphone_positions[:, 0],
+        microphone_positions[:, 1],
+        c="black",
+        s=45,
+    )
+
+    figure.colorbar(
+        image,
+        ax=axis,
+        label="Reconstructed Re(P)",
+    )
+
+    axis.set_xlabel("x (m)")
+    axis.set_ylabel("y (m)")
+
+    axis.set_title(
+        "Reconstructed real part - 16 microphones"
+    )
+
+    figure.tight_layout()
+
+    _save_figure(
+        figure,
+        path,
+    )
+
+    return figure
+
+
+def plot_gp_predictive_uncertainty(
+    predictive_variance: np.ndarray,
+    microphone_positions: np.ndarray,
+    x_coordinates: np.ndarray,
+    y_coordinates: np.ndarray,
+    path: str | Path | None = None,
+) -> Figure:
+    """Plot the historical GP predictive standard deviation."""
+    extent = [
+        float(x_coordinates[0]),
+        float(x_coordinates[-1]),
+        float(y_coordinates[0]),
+        float(y_coordinates[-1]),
+    ]
+
+    predictive_std = np.sqrt(
+        np.maximum(
+            np.real(
+                predictive_variance
+            ),
+            0.0,
+        )
+    )
+
+    figure, axis = plt.subplots(
+        figsize=(7, 6)
+    )
+
+    image = axis.imshow(
+        predictive_std,
+        origin="lower",
+        extent=extent,
+        cmap="magma",
+        aspect="auto",
+    )
+
+    axis.scatter(
+        microphone_positions[:, 0],
+        microphone_positions[:, 1],
+        c="white",
+        s=45,
+        edgecolors="black",
+    )
+
+    figure.colorbar(
+        image,
+        ax=axis,
+        label="GP predictive standard deviation",
+    )
+
+    axis.set_xlabel("x (m)")
+    axis.set_ylabel("y (m)")
+
+    axis.set_title(
+        "GP uncertainty - 16 microphones"
+    )
+
+    figure.tight_layout()
+
+    _save_figure(
+        figure,
+        path,
+    )
+
+    return figure
+
+
+def plot_gp_prediction_vs_measurement(
+    true_values: np.ndarray,
+    predicted_values: np.ndarray,
+    frequency: float,
+    path: str | Path | None = None,
+) -> Figure:
+    """Plot LOO predicted versus measured pressure magnitude."""
+    measured = np.abs(
+        true_values
+    )
+
+    predicted = np.abs(
+        predicted_values
+    )
+
+    maximum = float(
+        max(
+            np.max(measured),
+            np.max(predicted),
+        )
+    )
+
+    correlation = float(
+        np.corrcoef(
+            measured,
+            predicted,
+        )[0, 1]
+    )
+
+    figure, axis = plt.subplots(
+        figsize=(6, 6)
+    )
+
+    axis.scatter(
+        measured,
+        predicted,
+        s=90,
+    )
+
+    axis.plot(
+        [0.0, maximum],
+        [0.0, maximum],
+        "r--",
+        linewidth=2,
+        label="Perfect prediction",
+    )
+
+    axis.set_xlabel(
+        "Measured |P|"
+    )
+
+    axis.set_ylabel(
+        "Predicted |P|"
+    )
+
+    axis.set_title(
+        f"Leave-One-Out at {frequency:.0f} Hz\n"
+        f"Corr={correlation:.3f}"
+    )
+
+    axis.legend()
+    axis.grid(True)
+
+    figure.tight_layout()
+
+    _save_figure(
+        figure,
+        path,
+    )
+
+    return figure
+
+
+def plot_gp_spatial_error_map(
+    microphone_positions: np.ndarray,
+    absolute_errors: np.ndarray,
+    frequency: float,
+    path: str | Path | None = None,
+) -> Figure:
+    """Plot the spatial distribution of LOO absolute errors."""
+    figure, axis = plt.subplots(
+        figsize=(6, 6)
+    )
+
+    scatter = axis.scatter(
+        microphone_positions[:, 0],
+        microphone_positions[:, 1],
+        c=absolute_errors,
+        s=170,
+        cmap="inferno",
+        edgecolors="black",
+    )
+
+    figure.colorbar(
+        scatter,
+        ax=axis,
+        label="Absolute error",
+    )
+
+    axis.set_xlabel("x (m)")
+    axis.set_ylabel("y (m)")
+
+    axis.set_title(
+        "Spatial Leave-One-Out error "
+        f"- {frequency:.0f} Hz"
+    )
+
+    axis.set_aspect(
+        "equal",
+        adjustable="box",
+    )
+
+    figure.tight_layout()
+
+    _save_figure(
+        figure,
+        path,
+    )
+
+    return figure
