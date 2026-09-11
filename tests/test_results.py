@@ -23,6 +23,12 @@ def test_save_analysis_result(tmp_path):
         n_channels=16,
         n_samples=1000,
         n_snapshots=10,
+        spectrum_frequencies_hz=np.array(
+            [0.0, 100.0, 200.0]
+        ),
+        mean_spectrum=np.array(
+            [0.1, 1.0, 0.2]
+        ),
     )
 
     path = tmp_path / "analysis.npz"
@@ -34,6 +40,7 @@ def test_save_analysis_result(tmp_path):
 
     data = np.load(path)
 
+    # Estimated acoustic parameters
     assert np.allclose(
         data["frequency_hz"],
         [500.0],
@@ -54,6 +61,7 @@ def test_save_analysis_result(tmp_path):
         [0.25],
     )
 
+    # Pairwise data required to reconstruct RSS(k)
     assert np.allclose(
         data["distances_m"],
         [[0.04, 0.08]],
@@ -64,6 +72,18 @@ def test_save_analysis_result(tmp_path):
         [[0.9, 0.7]],
     )
 
+    # Mean spectrum
+    assert np.allclose(
+        data["spectrum_frequencies_hz"],
+        [0.0, 100.0, 200.0],
+    )
+
+    assert np.allclose(
+        data["mean_spectrum"],
+        [0.1, 1.0, 0.2],
+    )
+
+    # Acquisition metadata
     assert data["sample_rate_hz"] == 44100.0
     assert data["n_channels"] == 16
     assert data["n_samples"] == 1000

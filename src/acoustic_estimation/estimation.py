@@ -31,6 +31,8 @@ class AnalysisResult:
     n_channels: int
     n_samples: int
     n_snapshots: int
+    spectrum_frequencies_hz: NDArray[np.float64]
+    mean_spectrum: NDArray[np.float64]
 
 def build_pairwise_dataset(
     coherence: ArrayLike,

@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import matplotlib.pyplot as plt
+
 from acoustic_estimation.estimation import (
     AnalysisResult,
     FrequencyEstimate,
@@ -14,6 +16,12 @@ from acoustic_estimation.estimation import (
 )
 from acoustic_estimation.geometry import uma16_positions
 from acoustic_estimation.io import load_wav_array
+from acoustic_estimation.plotting import (
+    plot_mean_spectrum,
+    plot_rss,
+    plot_sinc_fit,
+    plot_sound_speed,
+)
 from acoustic_estimation.results import save_analysis_result
 from acoustic_estimation.spectral import (
     average_spectrum,
@@ -48,8 +56,8 @@ def analyze_uma16(
     Returns
     -------
     AnalysisResult
-        Estimated acoustic parameters, pairwise fit data, and acquisition
-        metadata.
+        Estimated acoustic parameters, pairwise fit data, spectrum, and
+        acquisition metadata.
     """
     sample_rate, signals = load_wav_array(
         data_directory,
@@ -148,6 +156,8 @@ def analyze_uma16(
         n_channels=signals.shape[0],
         n_samples=signals.shape[1],
         n_snapshots=n_snapshots,
+        spectrum_frequencies_hz=spectrum_frequencies,
+        mean_spectrum=mean_spectrum,
     )
 
 
@@ -179,6 +189,61 @@ def print_summary(
             f"{estimate.sound_speed_m_s:12.2f} "
             f"{estimate.rss:14.4e}"
         )
+
+
+def save_standard_figures(
+    result: AnalysisResult,
+    directory: str | Path,
+    reference_sound_speed: float = 343.0,
+    relative_threshold: float = 0.03,
+    fit_frequency: float = 500.0,
+) -> None:
+    """Generate and save the standard UMA16 analysis figures.
+
+    Parameters
+    ----------
+    result
+        Complete analysis result.
+    directory
+        Directory in which figures are saved.
+    reference_sound_speed
+        Reference sound speed displayed on the sound-speed figure.
+    relative_threshold
+        Relative spectral threshold displayed on the spectrum figure.
+    fit_frequency
+        Target frequency used for the spatial-coherence fit figure.
+    """
+    directory = Path(directory)
+
+    directory.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    figures = [
+        plot_sound_speed(
+            result,
+            reference_sound_speed=reference_sound_speed,
+            path=directory / "sound_speed.png",
+        ),
+        plot_rss(
+            result,
+            path=directory / "rss.png",
+        ),
+        plot_sinc_fit(
+            result,
+            target_frequency=fit_frequency,
+            path=directory / "sinc_fit_500hz.png",
+        ),
+        plot_mean_spectrum(
+            result,
+            relative_threshold=relative_threshold,
+            path=directory / "mean_spectrum.png",
+        ),
+    ]
+
+    for figure in figures:
+        plt.close(figure)
 
 
 def parse_args() -> argparse.Namespace:
@@ -237,6 +302,16 @@ def parse_args() -> argparse.Namespace:
         help="Optional path for the processed .npz analysis results.",
     )
 
+    parser.add_argument(
+        "--figures-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Optional directory in which standard analysis "
+            "figures are saved."
+        ),
+    )
+
     return parser.parse_args()
 
 
@@ -267,6 +342,16 @@ def main() -> None:
 
         print()
         print(f"Results saved to: {output_path}")
+
+    if args.figures_dir is not None:
+        save_standard_figures(
+            result,
+            directory=args.figures_dir,
+            reference_sound_speed=args.reference_sound_speed,
+            relative_threshold=args.threshold,
+        )
+
+        print(f"Figures saved to: {args.figures_dir}")
 
 
 if __name__ == "__main__":

@@ -82,15 +82,17 @@ def save_analysis_result(
         )
 
     np.savez_compressed(
-        path,
-        frequency_hz=frequencies,
-        wavenumber_rad_m=wavenumbers,
-        sound_speed_m_s=sound_speeds,
-        rss=rss,
-        distances_m=distances,
-        observed_coherence=observed_coherence,
-        sample_rate_hz=np.float64(result.sample_rate_hz),
-        n_channels=np.int64(result.n_channels),
-        n_samples=np.int64(result.n_samples),
-        n_snapshots=np.int64(result.n_snapshots),
-    )
+    path,
+    frequency_hz=frequencies,
+    wavenumber_rad_m=wavenumbers,
+    sound_speed_m_s=sound_speeds,
+    rss=rss,
+    distances_m=distances,
+    observed_coherence=observed_coherence,
+    spectrum_frequencies_hz=result.spectrum_frequencies_hz,
+    mean_spectrum=result.mean_spectrum,
+    sample_rate_hz=np.float64(result.sample_rate_hz),
+    n_channels=np.int64(result.n_channels),
+    n_samples=np.int64(result.n_samples),
+    n_snapshots=np.int64(result.n_snapshots),
+)
