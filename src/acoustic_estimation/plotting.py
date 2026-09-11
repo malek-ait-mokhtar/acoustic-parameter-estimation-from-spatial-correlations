@@ -576,3 +576,154 @@ def plot_rss_landscape(
     )
 
     return figure
+
+
+def plot_sound_speed_correction(
+    frequencies: np.ndarray,
+    baseline_sound_speeds: np.ndarray,
+    corrected_sound_speeds: np.ndarray,
+    reference_sound_speed: float = 347.0,
+    frequency_switch: float = 1500.0,
+    relative_tolerance: float = 0.05,
+    path: str | Path | None = None,
+) -> Figure:
+    """Plot baseline and local-minimum-corrected sound-speed estimates."""
+    frequencies = np.asarray(
+        frequencies,
+        dtype=np.float64,
+    )
+
+    baseline_sound_speeds = np.asarray(
+        baseline_sound_speeds,
+        dtype=np.float64,
+    )
+
+    corrected_sound_speeds = np.asarray(
+        corrected_sound_speeds,
+        dtype=np.float64,
+    )
+
+    if not (
+        frequencies.shape
+        == baseline_sound_speeds.shape
+        == corrected_sound_speeds.shape
+    ):
+        raise ValueError(
+            "frequencies and sound-speed arrays must have the same shape"
+        )
+
+    if frequencies.ndim != 1:
+        raise ValueError(
+            "frequencies and sound-speed arrays must be one-dimensional"
+        )
+
+    if frequencies.size == 0:
+        raise ValueError(
+            "at least one frequency estimate is required"
+        )
+
+    if reference_sound_speed <= 0:
+        raise ValueError(
+            "reference_sound_speed must be strictly positive"
+        )
+
+    if frequency_switch < 0:
+        raise ValueError(
+            "frequency_switch must be non-negative"
+        )
+
+    if relative_tolerance < 0:
+        raise ValueError(
+            "relative_tolerance must be non-negative"
+        )
+
+    order = np.argsort(
+        frequencies
+    )
+
+    frequencies = frequencies[
+        order
+    ]
+
+    baseline_sound_speeds = baseline_sound_speeds[
+        order
+    ]
+
+    corrected_sound_speeds = corrected_sound_speeds[
+        order
+    ]
+
+    figure, axis = plt.subplots(
+        figsize=(10, 6)
+    )
+
+    axis.plot(
+        frequencies,
+        baseline_sound_speeds,
+        "o-",
+        linewidth=1.8,
+        markersize=4,
+        label="Initial estimate",
+    )
+
+    axis.plot(
+        frequencies,
+        corrected_sound_speeds,
+        "o-",
+        linewidth=2.2,
+        markersize=4,
+        label=(
+            "Corrected estimate "
+            f"(f > {frequency_switch:.0f} Hz and "
+            f"|k-k_th|/k_th > "
+            f"{100 * relative_tolerance:.0f}%)"
+        ),
+    )
+
+    axis.axhline(
+        reference_sound_speed,
+        color="red",
+        linestyle="--",
+        linewidth=2,
+        label=(
+            f"Theoretical sound speed "
+            f"({reference_sound_speed:.0f} m/s)"
+        ),
+    )
+
+    axis.axvline(
+        frequency_switch,
+        color="gray",
+        linestyle=":",
+        linewidth=2,
+        label=(
+            f"Threshold {frequency_switch:.0f} Hz"
+        ),
+    )
+
+    axis.set_xlabel(
+        "Frequency (Hz)"
+    )
+
+    axis.set_ylabel(
+        "Estimated sound speed (m/s)"
+    )
+
+    axis.set_title(
+        "Estimated sound speed versus frequency"
+    )
+
+    axis.grid(True)
+
+    axis.legend(
+        loc="lower left"
+    )
+
+    figure.tight_layout()
+
+    _save_figure(
+        figure,
+        path,
+    )
+
+    return figure

@@ -45,6 +45,17 @@ class LocalMinimum:
     wavenumber_rad_m: float
     rss: float
 
+@dataclass
+class CorrectedFrequencyEstimate:
+    """Result of the local-minimum correction at one frequency."""
+
+    frequency_hz: float
+    baseline_wavenumber_rad_m: float
+    corrected_wavenumber_rad_m: float
+    baseline_sound_speed_m_s: float
+    corrected_sound_speed_m_s: float
+    theoretical_wavenumber_rad_m: float
+    was_corrected: bool
 
 def theoretical_wavenumber(
     frequency: float,
@@ -754,4 +765,167 @@ def closest_minimum_to_wavenumber(
             minimum.wavenumber_rad_m
             - target_wavenumber
         ),
+    )
+    
+
+def correct_wavenumber_with_local_minima(
+    frequency: float,
+    baseline_wavenumber: float,
+    distances: ArrayLike,
+    observed_coherence: ArrayLike,
+    reference_sound_speed: float = 347.0,
+    frequency_switch: float = 1500.0,
+    relative_tolerance: float = 0.05,
+    n_grid: int = 12000,
+) -> CorrectedFrequencyEstimate:
+    """Correct a high-frequency estimate using local RSS minima.
+
+    Frequencies at or below ``frequency_switch`` are left unchanged.
+    Above the switch, the baseline estimate is retained when its relative
+    wavenumber error is within ``relative_tolerance``. Otherwise, the local
+    RSS minimum closest to the theoretical wavenumber is selected.
+
+    This reproduces the correction rule used in the historical 24-microphone
+    analysis.
+    """
+    if frequency < 0:
+        raise ValueError(
+            "frequency must be non-negative"
+        )
+
+    if baseline_wavenumber <= 0:
+        raise ValueError(
+            "baseline_wavenumber must be strictly positive"
+        )
+
+    if reference_sound_speed <= 0:
+        raise ValueError(
+            "reference_sound_speed must be strictly positive"
+        )
+
+    if frequency_switch < 0:
+        raise ValueError(
+            "frequency_switch must be non-negative"
+        )
+
+    if relative_tolerance < 0:
+        raise ValueError(
+            "relative_tolerance must be non-negative"
+        )
+
+    if n_grid < 3:
+        raise ValueError(
+            "n_grid must be at least 3"
+        )
+
+    theoretical_k = theoretical_wavenumber(
+        frequency,
+        reference_sound_speed,
+    )
+
+    baseline_sound_speed = sound_speed_from_wavenumber(
+        frequency,
+        baseline_wavenumber,
+    )
+
+    # Historical rule: frequencies up to 1500 Hz are never corrected.
+    if frequency <= frequency_switch:
+        return CorrectedFrequencyEstimate(
+            frequency_hz=frequency,
+            baseline_wavenumber_rad_m=baseline_wavenumber,
+            corrected_wavenumber_rad_m=baseline_wavenumber,
+            baseline_sound_speed_m_s=baseline_sound_speed,
+            corrected_sound_speed_m_s=baseline_sound_speed,
+            theoretical_wavenumber_rad_m=theoretical_k,
+            was_corrected=False,
+        )
+
+    relative_error = (
+        abs(
+            baseline_wavenumber
+            - theoretical_k
+        )
+        / theoretical_k
+    )
+
+    # Keep estimates already sufficiently close to the physical reference.
+    if relative_error <= relative_tolerance:
+        return CorrectedFrequencyEstimate(
+            frequency_hz=frequency,
+            baseline_wavenumber_rad_m=baseline_wavenumber,
+            corrected_wavenumber_rad_m=baseline_wavenumber,
+            baseline_sound_speed_m_s=baseline_sound_speed,
+            corrected_sound_speed_m_s=baseline_sound_speed,
+            theoretical_wavenumber_rad_m=theoretical_k,
+            was_corrected=False,
+        )
+
+    k_min = max(
+        1e-6,
+        0.05 * theoretical_k,
+    )
+
+    k_max = max(
+        60.0,
+        15.0 * theoretical_k,
+    )
+
+    k_grid, rss_grid = evaluate_rss_landscape(
+        distances,
+        observed_coherence,
+        k_min=k_min,
+        k_max=k_max,
+        n_grid=n_grid,
+    )
+
+    minimum_indices = detect_local_minima(
+        k_grid,
+        rss_grid,
+    )
+
+    minima = refine_local_minima(
+        k_grid,
+        rss_grid,
+        minimum_indices,
+        distances,
+        observed_coherence,
+    )
+
+    # Historical behaviour: if no alternative minimum is detected,
+    # retain the baseline estimate.
+    if not minima:
+        return CorrectedFrequencyEstimate(
+            frequency_hz=frequency,
+            baseline_wavenumber_rad_m=baseline_wavenumber,
+            corrected_wavenumber_rad_m=baseline_wavenumber,
+            baseline_sound_speed_m_s=baseline_sound_speed,
+            corrected_sound_speed_m_s=baseline_sound_speed,
+            theoretical_wavenumber_rad_m=theoretical_k,
+            was_corrected=False,
+        )
+
+    selected = closest_minimum_to_wavenumber(
+        minima,
+        theoretical_k,
+    )
+
+    corrected_wavenumber = (
+        selected.wavenumber_rad_m
+    )
+
+    corrected_sound_speed = (
+        sound_speed_from_wavenumber(
+            frequency,
+            corrected_wavenumber,
+        )
+    )
+
+    return CorrectedFrequencyEstimate(
+        frequency_hz=frequency,
+        baseline_wavenumber_rad_m=baseline_wavenumber,
+        corrected_wavenumber_rad_m=corrected_wavenumber,
+        baseline_sound_speed_m_s=baseline_sound_speed,
+        corrected_sound_speed_m_s=corrected_sound_speed,
+        theoretical_wavenumber_rad_m=theoretical_k,
+        was_corrected=True,
     )

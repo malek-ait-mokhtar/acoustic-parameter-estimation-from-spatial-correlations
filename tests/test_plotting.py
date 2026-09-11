@@ -21,6 +21,7 @@ from acoustic_estimation.plotting import (
     plot_sinc_fit,
     plot_sound_speed,
     plot_sound_speed_retained_band,
+    plot_sound_speed_correction,
 )
 
 
@@ -223,3 +224,28 @@ def test_plot_rss_landscape_returns_figure():
     assert figure is not None
 
     plt.close(figure)
+    
+def test_plot_sound_speed_correction_returns_figure():
+    frequencies = np.array(
+        [1000.0, 1600.0, 2000.0]
+    )
+
+    baseline = np.array(
+        [345.0, 180.0, 200.0]
+    )
+
+    corrected = np.array(
+        [345.0, 350.0, 348.0]
+    )
+
+    figure = plot_sound_speed_correction(
+        frequencies=frequencies,
+        baseline_sound_speeds=baseline,
+        corrected_sound_speeds=corrected,
+    )
+
+    assert figure is not None
+
+    plt.close(
+        figure
+    )

@@ -12,6 +12,8 @@ from acoustic_estimation.estimation import (
     sinc_rss,
     sound_speed_from_wavenumber,
     theoretical_wavenumber,
+    CorrectedFrequencyEstimate,
+    correct_wavenumber_with_local_minima,
 )
 from acoustic_estimation.models import spherical_sinc
 
@@ -490,4 +492,102 @@ def test_closest_minimum_to_wavenumber():
     assert (
         selected.wavenumber_rad_m
         == 20.0
+    )
+    
+
+def test_local_minimum_correction_keeps_low_frequency_estimate():
+    frequency = 1000.0
+    baseline_wavenumber = 30.0
+
+    result = correct_wavenumber_with_local_minima(
+        frequency=frequency,
+        baseline_wavenumber=baseline_wavenumber,
+        distances=np.array([0.1, 0.2]),
+        observed_coherence=np.array([0.8, 0.5]),
+    )
+
+    assert isinstance(
+        result,
+        CorrectedFrequencyEstimate,
+    )
+
+    assert not result.was_corrected
+
+    assert (
+        result.corrected_wavenumber_rad_m
+        == baseline_wavenumber
+    )
+
+def test_local_minimum_correction_keeps_close_high_frequency_estimate():
+    frequency = 2000.0
+
+    theoretical_k = theoretical_wavenumber(
+        frequency,
+        347.0,
+    )
+
+    baseline_wavenumber = (
+        1.02 * theoretical_k
+    )
+
+    result = correct_wavenumber_with_local_minima(
+        frequency=frequency,
+        baseline_wavenumber=baseline_wavenumber,
+        distances=np.array([0.1, 0.2]),
+        observed_coherence=np.array([0.8, 0.5]),
+    )
+
+    assert not result.was_corrected
+
+    assert np.isclose(
+        result.corrected_wavenumber_rad_m,
+        baseline_wavenumber,
+    )
+    
+def test_local_minimum_correction_recovers_physical_high_frequency_minimum():
+    frequency = 2000.0
+    reference_sound_speed = 347.0
+
+    true_wavenumber = theoretical_wavenumber(
+        frequency,
+        reference_sound_speed,
+    )
+
+    distances = np.linspace(
+        0.03,
+        1.0,
+        200,
+    )
+
+    observed = spherical_sinc(
+        distances,
+        true_wavenumber,
+    )
+
+    # Deliberately provide a strongly incorrect baseline estimate.
+    baseline_wavenumber = (
+        2.0 * true_wavenumber
+    )
+
+    result = correct_wavenumber_with_local_minima(
+        frequency=frequency,
+        baseline_wavenumber=baseline_wavenumber,
+        distances=distances,
+        observed_coherence=observed,
+        reference_sound_speed=reference_sound_speed,
+        n_grid=4000,
+    )
+
+    assert result.was_corrected
+
+    assert np.isclose(
+        result.corrected_wavenumber_rad_m,
+        true_wavenumber,
+        rtol=1e-5,
+    )
+
+    assert np.isclose(
+        result.corrected_sound_speed_m_s,
+        reference_sound_speed,
+        rtol=1e-5,
     )
