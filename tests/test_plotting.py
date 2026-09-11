@@ -10,6 +10,7 @@ from acoustic_estimation.estimation import (
     AnalysisResult,
     FrequencyEstimate,
     LocalMinimum,
+    RssShapeAnalysis,
 )
 from acoustic_estimation.plotting import (
     closest_frequency_estimate,
@@ -22,6 +23,11 @@ from acoustic_estimation.plotting import (
     plot_sound_speed,
     plot_sound_speed_retained_band,
     plot_sound_speed_correction,
+    plot_rss_piecewise_affine,
+    plot_rss_second_derivative,
+    plot_rss_shape_estimators,
+    plot_piecewise_affine_sound_speed,
+    plot_second_derivative_sound_speed,
 )
 
 
@@ -249,3 +255,196 @@ def test_plot_sound_speed_correction_returns_figure():
     plt.close(
         figure
     )
+    
+def make_rss_shape_analysis() -> RssShapeAnalysis:
+    """Create a small synthetic RSS-shape analysis for plotting tests."""
+    k_grid = np.linspace(
+        10.0,
+        40.0,
+        100,
+    )
+
+    rss_grid = (
+        5.0
+        - 0.1 * k_grid
+        + 0.08
+        * np.maximum(
+            0.0,
+            k_grid - 25.0,
+        )
+    )
+
+    second_derivative = np.gradient(
+        np.gradient(
+            rss_grid,
+            k_grid,
+        ),
+        k_grid,
+    )
+
+    return RssShapeAnalysis(
+        frequency_hz=1528.86,
+        theoretical_wavenumber_rad_m=28.0,
+        baseline_wavenumber_rad_m=35.0,
+        k_grid=k_grid,
+        rss_grid=rss_grid,
+        local_minima_wavenumbers_rad_m=np.array(
+            [18.0, 32.0],
+            dtype=np.float64,
+        ),
+        local_minima_rss=np.array(
+            [3.2, 2.8],
+            dtype=np.float64,
+        ),
+        second_derivative=second_derivative,
+        second_derivative_wavenumber_rad_m=25.0,
+        piecewise_break_wavenumber_rad_m=25.0,
+        piecewise_fit=rss_grid.copy(),
+        piecewise_fit_at_break=float(
+            np.interp(
+                25.0,
+                k_grid,
+                rss_grid,
+            )
+        ),
+    )
+
+
+def test_plot_rss_second_derivative_returns_figure():
+    figure = plot_rss_second_derivative(
+        make_rss_shape_analysis()
+    )
+
+    assert figure is not None
+    assert len(figure.axes) == 2
+
+    plt.close(
+        figure
+    )
+
+
+def test_plot_rss_piecewise_affine_returns_figure():
+    figure = plot_rss_piecewise_affine(
+        make_rss_shape_analysis()
+    )
+
+    assert figure is not None
+    assert len(figure.axes) == 1
+
+    plt.close(
+        figure
+    )
+
+
+def test_plot_rss_shape_estimators_returns_figure():
+    figure = plot_rss_shape_estimators(
+        make_rss_shape_analysis()
+    )
+
+    assert figure is not None
+    assert len(figure.axes) == 2
+
+    plt.close(
+        figure
+    )
+    
+def test_plot_second_derivative_sound_speed_returns_figure():
+    frequencies = np.array(
+        [1000.0, 1500.0, 2000.0]
+    )
+
+    baseline = np.array(
+        [340.0, 180.0, 190.0]
+    )
+
+    adjusted = np.array(
+        [340.0, 600.0, 700.0]
+    )
+
+    figure = plot_second_derivative_sound_speed(
+        frequencies,
+        baseline,
+        adjusted,
+    )
+
+    assert figure is not None
+    assert len(figure.axes) == 1
+
+    plt.close(
+        figure
+    )
+
+
+def test_plot_piecewise_affine_sound_speed_returns_figure():
+    frequencies = np.array(
+        [1000.0, 1500.0, 2000.0]
+    )
+
+    baseline = np.array(
+        [340.0, 180.0, 190.0]
+    )
+
+    adjusted = np.array(
+        [340.0, 360.0, 350.0]
+    )
+
+    figure = plot_piecewise_affine_sound_speed(
+        frequencies,
+        baseline,
+        adjusted,
+    )
+
+    assert figure is not None
+    assert len(figure.axes) == 1
+
+    plt.close(
+        figure
+    )
+    
+def test_piecewise_sound_speed_plot_has_threshold_line():
+    figure = plot_piecewise_affine_sound_speed(
+        np.array([1000.0, 2000.0]),
+        np.array([340.0, 180.0]),
+        np.array([340.0, 350.0]),
+    )
+
+    axis = figure.axes[0]
+
+    vertical_lines = [
+        line
+        for line in axis.lines
+        if np.allclose(
+            np.asarray(line.get_xdata()),
+            1500.0,
+        )
+    ]
+
+    assert len(vertical_lines) == 1
+
+    plt.close(figure)
+
+
+def test_piecewise_sound_speed_plot_has_threshold_line():
+    figure = plot_piecewise_affine_sound_speed(
+        np.array([1000.0, 2000.0]),
+        np.array([340.0, 180.0]),
+        np.array([340.0, 350.0]),
+    )
+
+    axis = figure.axes[0]
+
+    vertical_lines = [
+        line
+        for line in axis.lines
+        if (
+            len(np.asarray(line.get_xdata())) == 2
+            and np.allclose(
+                np.asarray(line.get_xdata()),
+                [1500.0, 1500.0],
+            )
+        )
+    ]
+
+    assert len(vertical_lines) == 1
+
+    plt.close(figure)

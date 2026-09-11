@@ -14,6 +14,10 @@ from acoustic_estimation.estimation import (
     theoretical_wavenumber,
     CorrectedFrequencyEstimate,
     correct_wavenumber_with_local_minima,
+    PiecewiseAffineEstimate,
+    estimate_piecewise_affine_break,
+    SecondDerivativeEstimate,
+    estimate_second_derivative_wavenumber,
 )
 from acoustic_estimation.models import spherical_sinc
 
@@ -591,3 +595,215 @@ def test_local_minimum_correction_recovers_physical_high_frequency_minimum():
         reference_sound_speed,
         rtol=1e-5,
     )
+    
+
+def test_piecewise_affine_break_returns_estimate():
+    frequency = 1000.0
+    reference_sound_speed = 343.0
+
+    k_theory = theoretical_wavenumber(
+        frequency,
+        reference_sound_speed,
+    )
+
+    distances = np.linspace(
+        0.02,
+        0.18,
+        100,
+    )
+
+    observed = spherical_sinc(
+        distances,
+        k_theory,
+    )
+
+    result = estimate_piecewise_affine_break(
+        distances=distances,
+        observed_coherence=observed,
+        frequency=frequency,
+        reference_sound_speed=reference_sound_speed,
+        n_k_grid=200,
+        n_break_grid=100,
+    )
+
+    assert isinstance(
+        result,
+        PiecewiseAffineEstimate,
+    )
+
+    assert np.isfinite(
+        result.break_wavenumber_rad_m
+    )
+
+    assert result.break_wavenumber_rad_m > 0
+
+    assert np.isfinite(
+        result.sound_speed_m_s
+    )
+
+    assert result.sound_speed_m_s > 0
+
+    assert np.isfinite(
+        result.fit_sse
+    )
+
+    assert result.fit_sse >= 0
+
+
+def test_piecewise_affine_break_stays_inside_search_window():
+    frequency = 1500.0
+    reference_sound_speed = 343.0
+
+    k_theory = theoretical_wavenumber(
+        frequency,
+        reference_sound_speed,
+    )
+
+    distances = np.linspace(
+        0.02,
+        0.18,
+        80,
+    )
+
+    observed = spherical_sinc(
+        distances,
+        k_theory,
+    )
+
+    result = estimate_piecewise_affine_break(
+        distances=distances,
+        observed_coherence=observed,
+        frequency=frequency,
+        reference_sound_speed=reference_sound_speed,
+        lower_factor=0.5,
+        upper_factor=2.0,
+        n_k_grid=200,
+        n_break_grid=100,
+    )
+
+    assert (
+        0.5 * k_theory
+        <= result.break_wavenumber_rad_m
+        <= 2.0 * k_theory
+    )
+    
+def test_piecewise_affine_break_rejects_invalid_grid_size():
+    with pytest.raises(ValueError):
+        estimate_piecewise_affine_break(
+            distances=np.array(
+                [0.04, 0.08]
+            ),
+            observed_coherence=np.array(
+                [0.9, 0.7]
+            ),
+            frequency=1000.0,
+            n_k_grid=3,
+        )
+        
+
+def test_second_derivative_wavenumber_returns_estimate():
+    frequency = 1500.0
+    reference_sound_speed = 343.0
+
+    k_theory = theoretical_wavenumber(
+        frequency,
+        reference_sound_speed,
+    )
+
+    distances = np.linspace(
+        0.02,
+        0.18,
+        100,
+    )
+
+    observed = spherical_sinc(
+        distances,
+        k_theory,
+    )
+
+    result = estimate_second_derivative_wavenumber(
+        distances=distances,
+        observed_coherence=observed,
+        frequency=frequency,
+        reference_sound_speed=reference_sound_speed,
+        n_grid=1000,
+    )
+
+    assert isinstance(
+        result,
+        SecondDerivativeEstimate,
+    )
+
+    assert np.isfinite(
+        result.wavenumber_rad_m
+    )
+
+    assert result.wavenumber_rad_m > 0
+
+    assert np.isfinite(
+        result.sound_speed_m_s
+    )
+
+    assert result.sound_speed_m_s > 0
+
+    assert np.isfinite(
+        result.rss_at_wavenumber
+    )
+
+    assert result.rss_at_wavenumber >= 0
+
+    assert np.isfinite(
+        result.minimum_grid_rss
+    )
+
+    assert result.minimum_grid_rss >= 0
+    
+
+def test_second_derivative_wavenumber_stays_inside_search_window():
+    frequency = 1500.0
+    reference_sound_speed = 343.0
+
+    k_theory = theoretical_wavenumber(
+        frequency,
+        reference_sound_speed,
+    )
+
+    distances = np.linspace(
+        0.02,
+        0.18,
+        80,
+    )
+
+    observed = spherical_sinc(
+        distances,
+        k_theory,
+    )
+
+    result = estimate_second_derivative_wavenumber(
+        distances=distances,
+        observed_coherence=observed,
+        frequency=frequency,
+        reference_sound_speed=reference_sound_speed,
+        lower_factor=0.05,
+        upper_factor=15.0,
+        n_grid=1000,
+    )
+
+    assert (
+        0.05 * k_theory
+        <= result.wavenumber_rad_m
+        <= 15.0 * k_theory
+    )
+
+def test_second_derivative_wavenumber_rejects_invalid_grid_size():
+    with pytest.raises(ValueError):
+        estimate_second_derivative_wavenumber(
+            distances=np.array(
+                [0.04, 0.08]
+            ),
+            observed_coherence=np.array(
+                [0.9, 0.7]
+            ),
+            frequency=1500.0,
+            n_grid=2,
+        )

@@ -12,6 +12,7 @@ from acoustic_estimation.estimation import (
     AnalysisResult,
     FrequencyEstimate,
     LocalMinimum,
+    RssShapeAnalysis,
 )
 from acoustic_estimation.models import spherical_sinc
 
@@ -696,6 +697,643 @@ def plot_sound_speed_correction(
         color="gray",
         linestyle=":",
         linewidth=2,
+        label=(
+            f"Threshold {frequency_switch:.0f} Hz"
+        ),
+    )
+
+    axis.set_xlabel(
+        "Frequency (Hz)"
+    )
+
+    axis.set_ylabel(
+        "Estimated sound speed (m/s)"
+    )
+
+    axis.set_title(
+        "Estimated sound speed versus frequency"
+    )
+
+    axis.grid(True)
+
+    axis.legend(
+        loc="lower left"
+    )
+
+    figure.tight_layout()
+
+    _save_figure(
+        figure,
+        path,
+    )
+
+    return figure
+
+
+
+
+
+def plot_rss_second_derivative(
+    analysis: RssShapeAnalysis,
+    top_n: int = 20,
+    path: str | Path | None = None,
+) -> Figure:
+    """Plot RSS, its local minima, and its numerical second derivative."""
+    if top_n <= 0:
+        raise ValueError(
+            "top_n must be strictly positive"
+        )
+
+    figure, axis_rss = plt.subplots(
+        figsize=(11, 5)
+    )
+
+    axis_rss.plot(
+        analysis.k_grid,
+        analysis.rss_grid,
+        linewidth=1.5,
+        label="RSS(k)",
+    )
+
+    axis_rss.axvline(
+        analysis.theoretical_wavenumber_rad_m,
+        color="red",
+        linestyle="--",
+        linewidth=2,
+        label="Theoretical k",
+    )
+
+    axis_rss.axvline(
+        analysis.baseline_wavenumber_rad_m,
+        color="blue",
+        linestyle=":",
+        linewidth=2,
+        label="RSS-minimization estimate",
+    )
+
+    for rank, (k_minimum, rss_minimum) in enumerate(
+        zip(
+            analysis.local_minima_wavenumbers_rad_m[:top_n],
+            analysis.local_minima_rss[:top_n],
+        ),
+        start=1,
+    ):
+        axis_rss.scatter(
+            k_minimum,
+            rss_minimum,
+            s=40,
+        )
+
+        axis_rss.annotate(
+            str(rank),
+            (
+                k_minimum,
+                rss_minimum,
+            ),
+            textcoords="offset points",
+            xytext=(5, 5),
+            fontsize=9,
+        )
+
+    k_second = (
+        analysis.second_derivative_wavenumber_rad_m
+    )
+
+    rss_at_second = float(
+        np.interp(
+            k_second,
+            analysis.k_grid,
+            analysis.rss_grid,
+        )
+    )
+
+    axis_rss.scatter(
+        [k_second],
+        [rss_at_second],
+        s=90,
+        marker="X",
+        color="green",
+        zorder=8,
+        label=r"Abscissa of max $RSS''(k)$",
+    )
+
+    axis_rss.set_xlabel(
+        "k (rad/m)"
+    )
+
+    axis_rss.set_ylabel(
+        "RSS"
+    )
+
+    axis_rss.set_title(
+        "RSS objective versus wavenumber "
+        f"({analysis.frequency_hz:.2f} Hz)"
+    )
+
+    axis_rss.grid(True)
+
+    axis_second = axis_rss.twinx()
+
+    axis_second.plot(
+        analysis.k_grid,
+        analysis.second_derivative,
+        color="green",
+        linewidth=1.5,
+        alpha=0.85,
+        label=r"$RSS''(k)$",
+    )
+
+    axis_second.set_ylabel(
+        r"Second derivative of $RSS(k)$"
+    )
+
+    handles_rss, labels_rss = (
+        axis_rss.get_legend_handles_labels()
+    )
+
+    handles_second, labels_second = (
+        axis_second.get_legend_handles_labels()
+    )
+
+    axis_rss.legend(
+        handles_rss + handles_second,
+        labels_rss + labels_second,
+        loc="upper right",
+    )
+
+    figure.tight_layout()
+
+    _save_figure(
+        figure,
+        path,
+    )
+
+    return figure
+
+def plot_rss_piecewise_affine(
+    analysis: RssShapeAnalysis,
+    top_n: int = 20,
+    path: str | Path | None = None,
+) -> Figure:
+    """Plot RSS and its historical R4 piecewise-affine approximation."""
+    if top_n <= 0:
+        raise ValueError(
+            "top_n must be strictly positive"
+        )
+
+    figure, axis = plt.subplots(
+        figsize=(11, 5)
+    )
+
+    axis.plot(
+        analysis.k_grid,
+        analysis.rss_grid,
+        linewidth=1.5,
+        label="RSS(k)",
+    )
+
+    axis.axvline(
+        analysis.theoretical_wavenumber_rad_m,
+        color="red",
+        linestyle="--",
+        linewidth=2,
+        label="Theoretical k",
+    )
+
+    axis.axvline(
+        analysis.baseline_wavenumber_rad_m,
+        color="blue",
+        linestyle=":",
+        linewidth=2,
+        label="RSS-minimization estimate",
+    )
+
+    for rank, (k_minimum, rss_minimum) in enumerate(
+        zip(
+            analysis.local_minima_wavenumbers_rad_m[:top_n],
+            analysis.local_minima_rss[:top_n],
+        ),
+        start=1,
+    ):
+        axis.scatter(
+            k_minimum,
+            rss_minimum,
+            s=40,
+        )
+
+        axis.annotate(
+            str(rank),
+            (
+                k_minimum,
+                rss_minimum,
+            ),
+            textcoords="offset points",
+            xytext=(5, 5),
+            fontsize=9,
+        )
+
+    axis.plot(
+        analysis.k_grid,
+        analysis.piecewise_fit,
+        color="darkorange",
+        linewidth=2.5,
+        label="Piecewise-affine fit",
+    )
+
+    k_break = (
+        analysis.piecewise_break_wavenumber_rad_m
+    )
+
+    # First cross: breakpoint on the fitted piecewise-affine model.
+    axis.scatter(
+        [k_break],
+        [analysis.piecewise_fit_at_break],
+        s=110,
+        marker="X",
+        color="darkorange",
+        zorder=8,
+        label="Breakpoint",
+    )
+
+    # Second cross: same abscissa projected onto the actual RSS curve.
+    rss_at_break = float(
+        np.interp(
+            k_break,
+            analysis.k_grid,
+            analysis.rss_grid,
+        )
+    )
+
+    axis.scatter(
+        [k_break],
+        [rss_at_break],
+        s=110,
+        marker="X",
+        color="gold",
+        zorder=9,
+        label="Breakpoint abscissa",
+    )
+
+    axis.set_xlabel(
+        "k (rad/m)"
+    )
+
+    axis.set_ylabel(
+        "RSS"
+    )
+
+    axis.set_title(
+        "RSS objective versus wavenumber "
+        f"({analysis.frequency_hz:.2f} Hz)"
+    )
+
+    axis.grid(True)
+    axis.legend()
+
+    figure.tight_layout()
+
+    _save_figure(
+        figure,
+        path,
+    )
+
+    return figure
+
+
+def plot_rss_shape_estimators(
+    analysis: RssShapeAnalysis,
+    top_n: int = 20,
+    path: str | Path | None = None,
+) -> Figure:
+    """Compare the historical R4 alternative RSS estimators."""
+    if top_n <= 0:
+        raise ValueError(
+            "top_n must be strictly positive"
+        )
+
+    figure, axis_rss = plt.subplots(
+        figsize=(11, 5)
+    )
+
+    axis_rss.plot(
+        analysis.k_grid,
+        analysis.rss_grid,
+        linewidth=1.5,
+        label="RSS(k)",
+    )
+
+    axis_rss.axvline(
+        analysis.theoretical_wavenumber_rad_m,
+        color="red",
+        linestyle="--",
+        linewidth=2,
+        label="Theoretical k",
+    )
+
+    axis_rss.axvline(
+        analysis.baseline_wavenumber_rad_m,
+        color="blue",
+        linestyle=":",
+        linewidth=2,
+        label="RSS-minimization estimate",
+    )
+
+    for rank, (k_minimum, rss_minimum) in enumerate(
+        zip(
+            analysis.local_minima_wavenumbers_rad_m[:top_n],
+            analysis.local_minima_rss[:top_n],
+        ),
+        start=1,
+    ):
+        axis_rss.scatter(
+            k_minimum,
+            rss_minimum,
+            s=40,
+        )
+
+        axis_rss.annotate(
+            str(rank),
+            (
+                k_minimum,
+                rss_minimum,
+            ),
+            textcoords="offset points",
+            xytext=(5, 5),
+            fontsize=9,
+        )
+
+    axis_rss.plot(
+        analysis.k_grid,
+        analysis.piecewise_fit,
+        color="darkorange",
+        linewidth=2.5,
+        label="Piecewise-affine fit",
+    )
+
+    # R4 Figure 17 only projects the breakpoint abscissa onto RSS.
+    k_break = (
+        analysis.piecewise_break_wavenumber_rad_m
+    )
+
+    axis_rss.scatter(
+        [k_break],
+        [
+            np.interp(
+                k_break,
+                analysis.k_grid,
+                analysis.rss_grid,
+            )
+        ],
+        s=110,
+        marker="X",
+        color="darkorange",
+        zorder=9,
+        label="Breakpoint abscissa",
+    )
+
+    k_second = (
+        analysis.second_derivative_wavenumber_rad_m
+    )
+
+    axis_rss.scatter(
+        [k_second],
+        [
+            np.interp(
+                k_second,
+                analysis.k_grid,
+                analysis.rss_grid,
+            )
+        ],
+        s=110,
+        marker="X",
+        color="green",
+        zorder=10,
+        label=r"Abscissa of max $RSS''(k)$",
+    )
+
+    axis_rss.set_xlabel(
+        "k (rad/m)"
+    )
+
+    axis_rss.set_ylabel(
+        "RSS"
+    )
+
+    axis_rss.set_title(
+        "RSS objective versus wavenumber "
+        f"({analysis.frequency_hz:.2f} Hz)"
+    )
+
+    axis_rss.grid(True)
+
+    axis_second = axis_rss.twinx()
+
+    axis_second.plot(
+        analysis.k_grid,
+        analysis.second_derivative,
+        color="green",
+        linewidth=1.5,
+        alpha=0.85,
+        label=r"$RSS''(k)$",
+    )
+
+    axis_second.set_ylabel(
+        r"Second derivative of $RSS(k)$"
+    )
+
+    handles_rss, labels_rss = (
+        axis_rss.get_legend_handles_labels()
+    )
+
+    handles_second, labels_second = (
+        axis_second.get_legend_handles_labels()
+    )
+
+    axis_rss.legend(
+        handles_rss + handles_second,
+        labels_rss + labels_second,
+        loc="upper right",
+    )
+
+    figure.tight_layout()
+
+    _save_figure(
+        figure,
+        path,
+    )
+
+    return figure
+
+
+def plot_second_derivative_sound_speed(
+    frequencies_hz: np.ndarray,
+    baseline_sound_speed_m_s: np.ndarray,
+    second_derivative_sound_speed_m_s: np.ndarray,
+    reference_sound_speed: float = 343.0,
+    path: str | Path | None = None,
+) -> Figure:
+    """Plot the historical R6 second-derivative sound-speed result."""
+    frequencies_hz = np.asarray(
+        frequencies_hz,
+        dtype=np.float64,
+    )
+
+    baseline_sound_speed_m_s = np.asarray(
+        baseline_sound_speed_m_s,
+        dtype=np.float64,
+    )
+
+    second_derivative_sound_speed_m_s = np.asarray(
+        second_derivative_sound_speed_m_s,
+        dtype=np.float64,
+    )
+
+    if not (
+        frequencies_hz.shape
+        == baseline_sound_speed_m_s.shape
+        == second_derivative_sound_speed_m_s.shape
+    ):
+        raise ValueError(
+            "frequency and sound-speed arrays must have the same shape"
+        )
+
+    figure, axis = plt.subplots(
+        figsize=(9, 5)
+    )
+
+    axis.plot(
+        frequencies_hz,
+        baseline_sound_speed_m_s,
+        "o-",
+        linewidth=1.8,
+        markersize=4,
+        label="Initial estimate",
+    )
+
+    axis.plot(
+        frequencies_hz,
+        second_derivative_sound_speed_m_s,
+        "o-",
+        linewidth=1.8,
+        markersize=4,
+        color="green",
+        label=(
+            r"Second-derivative estimate "
+            r"(maximum of $RSS''$, $f \geq 1500$ Hz)"
+        ),
+    )
+
+    axis.axhline(
+        reference_sound_speed,
+        color="red",
+        linestyle="--",
+        linewidth=1.5,
+        label=f"{reference_sound_speed:.0f} m/s",
+    )
+
+    axis.set_xlabel(
+        "Frequency (Hz)"
+    )
+
+    axis.set_ylabel(
+        "Estimated sound speed (m/s)"
+    )
+
+    axis.set_title(
+        "Estimated sound speed versus frequency"
+    )
+
+    axis.grid(True)
+
+    axis.legend(
+        loc="lower left"
+    )
+
+    figure.tight_layout()
+
+    _save_figure(
+        figure,
+        path,
+    )
+
+    return figure
+
+def plot_piecewise_affine_sound_speed(
+    frequencies_hz: np.ndarray,
+    baseline_sound_speed_m_s: np.ndarray,
+    piecewise_sound_speed_m_s: np.ndarray,
+    frequency_switch: float = 1500.0,
+    reference_sound_speed: float = 343.0,
+    path: str | Path | None = None,
+) -> Figure:
+    """Plot the historical R5 piecewise-affine sound-speed result."""
+    frequencies_hz = np.asarray(
+        frequencies_hz,
+        dtype=np.float64,
+    )
+
+    baseline_sound_speed_m_s = np.asarray(
+        baseline_sound_speed_m_s,
+        dtype=np.float64,
+    )
+
+    piecewise_sound_speed_m_s = np.asarray(
+        piecewise_sound_speed_m_s,
+        dtype=np.float64,
+    )
+
+    if not (
+        frequencies_hz.shape
+        == baseline_sound_speed_m_s.shape
+        == piecewise_sound_speed_m_s.shape
+    ):
+        raise ValueError(
+            "frequency and sound-speed arrays must have the same shape"
+        )
+
+    figure, axis = plt.subplots(
+        figsize=(9, 5)
+    )
+
+    axis.plot(
+        frequencies_hz,
+        baseline_sound_speed_m_s,
+        "o-",
+        markersize=4,
+        linewidth=1.5,
+        label="Initial estimate",
+    )
+
+    axis.plot(
+        frequencies_hz,
+        piecewise_sound_speed_m_s,
+        "o-",
+        markersize=4,
+        linewidth=1.8,
+        color="green",
+        label=(
+            "Piecewise-affine estimate "
+            f"(for f >= {frequency_switch:.0f} Hz)"
+        ),
+    )
+
+    axis.axhline(
+        reference_sound_speed,
+        color="red",
+        linestyle="--",
+        linewidth=1.8,
+        label=(
+            "Theoretical sound speed "
+            f"({reference_sound_speed:.0f} m/s)"
+        ),
+    )
+
+    axis.axvline(
+        frequency_switch,
+        color="gray",
+        linestyle=":",
+        linewidth=1.4,
+        alpha=0.8,
         label=(
             f"Threshold {frequency_switch:.0f} Hz"
         ),

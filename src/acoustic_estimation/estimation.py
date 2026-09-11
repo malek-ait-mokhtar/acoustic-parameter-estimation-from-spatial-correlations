@@ -57,6 +57,47 @@ class CorrectedFrequencyEstimate:
     theoretical_wavenumber_rad_m: float
     was_corrected: bool
 
+
+@dataclass
+class PiecewiseAffineEstimate:
+    """Piecewise-affine estimate of a transition in the RSS landscape."""
+
+    break_wavenumber_rad_m: float
+    sound_speed_m_s: float
+    fit_sse: float
+
+
+@dataclass
+class SecondDerivativeEstimate:
+    """Wavenumber estimate based on the curvature of the RSS landscape."""
+
+    wavenumber_rad_m: float
+    sound_speed_m_s: float
+    rss_at_wavenumber: float
+    minimum_grid_rss: float
+    
+@dataclass
+class RssShapeAnalysis:
+    """Detailed historical R4 analysis of one RSS landscape."""
+
+    frequency_hz: float
+    theoretical_wavenumber_rad_m: float
+    baseline_wavenumber_rad_m: float
+
+    k_grid: NDArray[np.float64]
+    rss_grid: NDArray[np.float64]
+
+    local_minima_wavenumbers_rad_m: NDArray[np.float64]
+    local_minima_rss: NDArray[np.float64]
+
+    second_derivative: NDArray[np.float64]
+    second_derivative_wavenumber_rad_m: float
+
+    piecewise_break_wavenumber_rad_m: float
+    piecewise_fit: NDArray[np.float64]
+    piecewise_fit_at_break: float
+
+
 def theoretical_wavenumber(
     frequency: float,
     sound_speed: float,
@@ -928,4 +969,905 @@ def correct_wavenumber_with_local_minima(
         corrected_sound_speed_m_s=corrected_sound_speed,
         theoretical_wavenumber_rad_m=theoretical_k,
         was_corrected=True,
+    )
+    
+
+def estimate_piecewise_affine_break(
+    distances: ArrayLike,
+    observed_coherence: ArrayLike,
+    frequency: float,
+    reference_sound_speed: float = 343.0,
+    lower_factor: float = 0.5,
+    upper_factor: float = 2.0,
+    n_k_grid: int = 800,
+    n_break_grid: int = 500,
+) -> PiecewiseAffineEstimate:
+    """Estimate an RSS transition using a piecewise-affine model.
+
+    The RSS landscape is approximated by
+
+        RSS(k) = b + a*k + c*max(0, k-k_break)
+
+    and ``k_break`` is selected to minimise the least-squares error of
+    the piecewise-affine approximation.
+
+    This implements the efficient estimator used in the historical R5
+    analysis.
+    """
+    distances = np.asarray(
+        distances,
+        dtype=np.float64,
+    )
+
+    observed_coherence = np.asarray(
+        observed_coherence,
+        dtype=np.float64,
+    )
+
+    if distances.shape != observed_coherence.shape:
+        raise ValueError(
+            "distances and observed_coherence must have the same shape"
+        )
+
+    if distances.ndim != 1:
+        raise ValueError(
+            "distances and observed_coherence must be one-dimensional"
+        )
+
+    if distances.size == 0:
+        raise ValueError(
+            "at least one microphone pair is required"
+        )
+
+    if not np.all(np.isfinite(distances)):
+        raise ValueError(
+            "distances must contain only finite values"
+        )
+
+    if not np.all(np.isfinite(observed_coherence)):
+        raise ValueError(
+            "observed_coherence must contain only finite values"
+        )
+
+    if frequency <= 0:
+        raise ValueError(
+            "frequency must be strictly positive"
+        )
+
+    if reference_sound_speed <= 0:
+        raise ValueError(
+            "reference_sound_speed must be strictly positive"
+        )
+
+    if lower_factor <= 0:
+        raise ValueError(
+            "lower_factor must be strictly positive"
+        )
+
+    if upper_factor <= lower_factor:
+        raise ValueError(
+            "upper_factor must be greater than lower_factor"
+        )
+
+    if n_k_grid < 4:
+        raise ValueError(
+            "n_k_grid must be at least 4"
+        )
+
+    if n_break_grid < 1:
+        raise ValueError(
+            "n_break_grid must be strictly positive"
+        )
+
+    k_theory = theoretical_wavenumber(
+        frequency,
+        reference_sound_speed,
+    )
+
+    k_min = max(
+        1e-6,
+        lower_factor * k_theory,
+    )
+
+    k_max = max(
+        k_min * 1.01,
+        upper_factor * k_theory,
+    )
+
+    k_grid = np.linspace(
+        k_min,
+        k_max,
+        n_k_grid,
+        dtype=np.float64,
+    )
+
+    rss_grid = np.array(
+        [
+            sinc_rss(
+                k,
+                distances,
+                observed_coherence,
+            )
+            for k in k_grid
+        ],
+        dtype=np.float64,
+    )
+
+    # Prefix sums used to evaluate each candidate breakpoint without
+    # recomputing a complete least-squares fit.
+    x = k_grid
+    y = rss_grid
+    n = len(x)
+
+    x2 = x * x
+    y2 = y * y
+    xy = x * y
+
+    prefix_x = np.concatenate(
+        ([0.0], np.cumsum(x))
+    )
+
+    prefix_x2 = np.concatenate(
+        ([0.0], np.cumsum(x2))
+    )
+
+    prefix_y = np.concatenate(
+        ([0.0], np.cumsum(y))
+    )
+
+    prefix_y2 = np.concatenate(
+        ([0.0], np.cumsum(y2))
+    )
+
+    prefix_xy = np.concatenate(
+        ([0.0], np.cumsum(xy))
+    )
+
+    total_x = prefix_x[-1]
+    total_x2 = prefix_x2[-1]
+    total_y = prefix_y[-1]
+    total_y2 = prefix_y2[-1]
+    total_xy = prefix_xy[-1]
+
+    if n_break_grid >= n - 2:
+        break_indices = np.arange(
+            1,
+            n - 1,
+        )
+    else:
+        break_indices = np.linspace(
+            1,
+            n - 2,
+            n_break_grid,
+        ).astype(int)
+
+        break_indices = np.unique(
+            break_indices
+        )
+
+    best_sse = np.inf
+    best_break = float(
+        x[n // 2]
+    )
+
+    for index in break_indices:
+        breakpoint = float(
+            x[index]
+        )
+
+        right_start = int(
+            np.searchsorted(
+                x,
+                breakpoint,
+                side="right",
+            )
+        )
+
+        n_right = (
+            n - right_start
+        )
+
+        if n_right < 3:
+            continue
+
+        sum_x_right = (
+            total_x
+            - prefix_x[right_start]
+        )
+
+        sum_x2_right = (
+            total_x2
+            - prefix_x2[right_start]
+        )
+
+        sum_y_right = (
+            total_y
+            - prefix_y[right_start]
+        )
+
+        sum_xy_right = (
+            total_xy
+            - prefix_xy[right_start]
+        )
+
+        sum_h = (
+            sum_x_right
+            - breakpoint * n_right
+        )
+
+        sum_xh = (
+            sum_x2_right
+            - breakpoint * sum_x_right
+        )
+
+        sum_hh = (
+            sum_x2_right
+            - 2.0
+            * breakpoint
+            * sum_x_right
+            + breakpoint**2
+            * n_right
+        )
+
+        sum_hy = (
+            sum_xy_right
+            - breakpoint
+            * sum_y_right
+        )
+
+        xtx = np.array(
+            [
+                [
+                    n,
+                    total_x,
+                    sum_h,
+                ],
+                [
+                    total_x,
+                    total_x2,
+                    sum_xh,
+                ],
+                [
+                    sum_h,
+                    sum_xh,
+                    sum_hh,
+                ],
+            ],
+            dtype=np.float64,
+        )
+
+        xty = np.array(
+            [
+                total_y,
+                total_xy,
+                sum_hy,
+            ],
+            dtype=np.float64,
+        )
+
+        try:
+            coefficients = np.linalg.solve(
+                xtx,
+                xty,
+            )
+        except np.linalg.LinAlgError:
+            continue
+
+        sse = float(
+            total_y2
+            - coefficients @ xty
+        )
+
+        if sse < best_sse:
+            best_sse = sse
+            best_break = breakpoint
+
+    if not np.isfinite(best_sse):
+        raise RuntimeError(
+            "piecewise-affine breakpoint estimation failed"
+        )
+
+    sound_speed = sound_speed_from_wavenumber(
+        frequency,
+        best_break,
+    )
+
+    return PiecewiseAffineEstimate(
+        break_wavenumber_rad_m=best_break,
+        sound_speed_m_s=sound_speed,
+        fit_sse=best_sse,
+    )
+    
+    
+def estimate_second_derivative_wavenumber(
+    distances: ArrayLike,
+    observed_coherence: ArrayLike,
+    frequency: float,
+    reference_sound_speed: float = 343.0,
+    lower_factor: float = 0.05,
+    upper_factor: float = 15.0,
+    n_grid: int = 12000,
+    edge_offset_min: int = 20,
+) -> SecondDerivativeEstimate:
+    """Estimate wavenumber from the maximum curvature of RSS(k).
+
+    The RSS landscape is evaluated on a regular wavenumber grid. Its
+    numerical second derivative is computed using two successive gradient
+    operations, and the estimate is defined as the abscissa of the maximum
+    second derivative after excluding a small left-edge region.
+
+    This reproduces the alternative estimator investigated in the
+    historical R6 analysis.
+    """
+    distances = np.asarray(
+        distances,
+        dtype=np.float64,
+    )
+
+    observed_coherence = np.asarray(
+        observed_coherence,
+        dtype=np.float64,
+    )
+
+    if distances.shape != observed_coherence.shape:
+        raise ValueError(
+            "distances and observed_coherence must have the same shape"
+        )
+
+    if distances.ndim != 1:
+        raise ValueError(
+            "distances and observed_coherence must be one-dimensional"
+        )
+
+    if distances.size == 0:
+        raise ValueError(
+            "at least one microphone pair is required"
+        )
+
+    if not np.all(np.isfinite(distances)):
+        raise ValueError(
+            "distances must contain only finite values"
+        )
+
+    if not np.all(np.isfinite(observed_coherence)):
+        raise ValueError(
+            "observed_coherence must contain only finite values"
+        )
+
+    if frequency <= 0:
+        raise ValueError(
+            "frequency must be strictly positive"
+        )
+
+    if reference_sound_speed <= 0:
+        raise ValueError(
+            "reference_sound_speed must be strictly positive"
+        )
+
+    if lower_factor <= 0:
+        raise ValueError(
+            "lower_factor must be strictly positive"
+        )
+
+    if upper_factor <= lower_factor:
+        raise ValueError(
+            "upper_factor must be greater than lower_factor"
+        )
+
+    if n_grid < 3:
+        raise ValueError(
+            "n_grid must be at least 3"
+        )
+
+    if edge_offset_min < 0:
+        raise ValueError(
+            "edge_offset_min must be non-negative"
+        )
+
+    k_theory = theoretical_wavenumber(
+        frequency,
+        reference_sound_speed,
+    )
+
+    k_min = max(
+        1e-6,
+        lower_factor * k_theory,
+    )
+
+    k_max = max(
+        k_min * 1.01,
+        upper_factor * k_theory,
+    )
+
+    k_grid = np.linspace(
+        k_min,
+        k_max,
+        n_grid,
+        dtype=np.float64,
+    )
+
+    rss_grid = np.array(
+        [
+            sinc_rss(
+                k,
+                distances,
+                observed_coherence,
+            )
+            for k in k_grid
+        ],
+        dtype=np.float64,
+    )
+
+    second_derivative = np.gradient(
+        np.gradient(
+            rss_grid,
+            k_grid,
+        ),
+        k_grid,
+    )
+
+    offset = max(
+        edge_offset_min,
+        len(k_grid) // 100,
+    )
+
+    if offset >= len(k_grid) - 1:
+        offset = 1
+
+    index = (
+        offset
+        + int(
+            np.argmax(
+                second_derivative[offset:]
+            )
+        )
+    )
+
+    wavenumber = float(
+        k_grid[index]
+    )
+
+    minimum_grid_rss = float(
+        np.min(rss_grid)
+    )
+
+    rss_at_wavenumber = float(
+        np.interp(
+            wavenumber,
+            k_grid,
+            rss_grid,
+        )
+    )
+
+    sound_speed = sound_speed_from_wavenumber(
+        frequency,
+        wavenumber,
+    )
+
+    return SecondDerivativeEstimate(
+        wavenumber_rad_m=wavenumber,
+        sound_speed_m_s=sound_speed,
+        rss_at_wavenumber=rss_at_wavenumber,
+        minimum_grid_rss=minimum_grid_rss,
+    )
+    
+
+def analyze_rss_shape(
+    distances: ArrayLike,
+    observed_coherence: ArrayLike,
+    frequency: float,
+    baseline_wavenumber: float,
+    reference_sound_speed: float = 343.0,
+    n_grid: int = 12000,
+    k_min_factor: float = 0.05,
+    k_max_factor: float = 15.0,
+    break_lower_factor: float = 0.5,
+    break_upper_factor: float = 2.0,
+    n_break_grid: int = 3000,
+) -> RssShapeAnalysis:
+    """Reproduce the historical R4 RSS-shape analysis."""
+    distances = np.asarray(
+        distances,
+        dtype=np.float64,
+    )
+
+    observed_coherence = np.asarray(
+        observed_coherence,
+        dtype=np.float64,
+    )
+
+    if distances.shape != observed_coherence.shape:
+        raise ValueError(
+            "distances and observed_coherence must have the same shape"
+        )
+
+    if distances.ndim != 1:
+        raise ValueError(
+            "distances and observed_coherence must be one-dimensional"
+        )
+
+    if distances.size == 0:
+        raise ValueError(
+            "at least one microphone pair is required"
+        )
+
+    if not np.all(np.isfinite(distances)):
+        raise ValueError(
+            "distances must contain only finite values"
+        )
+
+    if not np.all(np.isfinite(observed_coherence)):
+        raise ValueError(
+            "observed_coherence must contain only finite values"
+        )
+
+    if frequency <= 0:
+        raise ValueError(
+            "frequency must be strictly positive"
+        )
+
+    if baseline_wavenumber <= 0:
+        raise ValueError(
+            "baseline_wavenumber must be strictly positive"
+        )
+
+    if reference_sound_speed <= 0:
+        raise ValueError(
+            "reference_sound_speed must be strictly positive"
+        )
+
+    if n_grid < 3:
+        raise ValueError(
+            "n_grid must be at least 3"
+        )
+
+    if k_min_factor <= 0:
+        raise ValueError(
+            "k_min_factor must be strictly positive"
+        )
+
+    if k_max_factor <= k_min_factor:
+        raise ValueError(
+            "k_max_factor must be greater than k_min_factor"
+        )
+
+    if break_lower_factor <= 0:
+        raise ValueError(
+            "break_lower_factor must be strictly positive"
+        )
+
+    if break_upper_factor <= break_lower_factor:
+        raise ValueError(
+            "break_upper_factor must be greater than "
+            "break_lower_factor"
+        )
+
+    if n_break_grid < 1:
+        raise ValueError(
+            "n_break_grid must be strictly positive"
+        )
+
+    # ------------------------------------------------------------------
+    # Historical R4 RSS landscape.
+    # ------------------------------------------------------------------
+
+    k_theory = theoretical_wavenumber(
+        frequency,
+        reference_sound_speed,
+    )
+
+    k_min = max(
+        1e-6,
+        k_min_factor * k_theory,
+    )
+
+    k_max = max(
+        60.0,
+        k_max_factor * k_theory,
+    )
+
+    k_grid = np.linspace(
+        k_min,
+        k_max,
+        n_grid,
+        dtype=np.float64,
+    )
+
+    rss_grid = np.array(
+        [
+            sinc_rss(
+                k,
+                distances,
+                observed_coherence,
+            )
+            for k in k_grid
+        ],
+        dtype=np.float64,
+    )
+
+    # ------------------------------------------------------------------
+    # Historical local-minimum detection and refinement.
+    # ------------------------------------------------------------------
+
+    span = float(
+        np.max(rss_grid)
+        - np.min(rss_grid)
+    )
+
+    prominence = max(
+        1e-12,
+        1e-4 * span,
+    )
+
+    minimum_indices, _ = find_peaks(
+        -rss_grid,
+        prominence=prominence,
+    )
+
+    refined_minima: list[
+        tuple[float, float]
+    ] = []
+
+    for position, index in enumerate(
+        minimum_indices
+    ):
+        if position == 0:
+            left = float(
+                k_grid[0]
+            )
+        else:
+            previous_index = minimum_indices[
+                position - 1
+            ]
+
+            left = float(
+                0.5
+                * (
+                    k_grid[previous_index]
+                    + k_grid[index]
+                )
+            )
+
+        if position == len(minimum_indices) - 1:
+            right = float(
+                k_grid[-1]
+            )
+        else:
+            next_index = minimum_indices[
+                position + 1
+            ]
+
+            right = float(
+                0.5
+                * (
+                    k_grid[index]
+                    + k_grid[next_index]
+                )
+            )
+
+        if right <= left:
+            continue
+
+        result = minimize_scalar(
+            sinc_rss,
+            bounds=(
+                left,
+                right,
+            ),
+            args=(
+                distances,
+                observed_coherence,
+            ),
+            method="bounded",
+            options={
+                "xatol": 1e-10,
+                "maxiter": 5000,
+            },
+        )
+
+        refined_minima.append(
+            (
+                float(result.x),
+                float(result.fun),
+            )
+        )
+
+    # R4 sorts minima by RSS, not by wavenumber.
+    refined_minima.sort(
+        key=lambda item: item[1]
+    )
+
+    local_minima_k = np.array(
+        [
+            item[0]
+            for item in refined_minima
+        ],
+        dtype=np.float64,
+    )
+
+    local_minima_rss = np.array(
+        [
+            item[1]
+            for item in refined_minima
+        ],
+        dtype=np.float64,
+    )
+
+    # ------------------------------------------------------------------
+    # Historical R4 second derivative.
+    # ------------------------------------------------------------------
+
+    second_derivative = np.gradient(
+        np.gradient(
+            rss_grid,
+            k_grid,
+        ),
+        k_grid,
+    )
+
+    offset = max(
+        20,
+        len(k_grid) // 100,
+    )
+
+    if offset >= len(k_grid) - 1:
+        offset = 1
+
+    second_index = (
+        offset
+        + int(
+            np.argmax(
+                second_derivative[offset:]
+            )
+        )
+    )
+
+    second_k = float(
+        k_grid[second_index]
+    )
+
+    # ------------------------------------------------------------------
+    # Historical R4 piecewise-affine fit.
+    #
+    # IMPORTANT:
+    # breakpoint candidates are restricted to [0.5*k_th, 2*k_th],
+    # but every candidate is fitted against the COMPLETE 12000-point
+    # RSS landscape.
+    # ------------------------------------------------------------------
+
+    break_min = max(
+        float(np.min(k_grid)),
+        break_lower_factor * k_theory,
+    )
+
+    break_max = min(
+        float(np.max(k_grid)),
+        break_upper_factor * k_theory,
+    )
+
+    if break_max <= break_min:
+        break_min = float(
+            np.min(k_grid)
+        )
+
+        break_max = float(
+            np.max(k_grid)
+        )
+
+    break_grid = np.linspace(
+        break_min,
+        break_max,
+        n_break_grid,
+        dtype=np.float64,
+    )
+
+    best_sse = np.inf
+    best_break: float | None = None
+    best_coefficients: NDArray[np.float64] | None = None
+
+    for breakpoint in break_grid:
+        hinge = np.maximum(
+            0.0,
+            k_grid - breakpoint,
+        )
+
+        design = np.column_stack(
+            (
+                np.ones_like(k_grid),
+                k_grid,
+                hinge,
+            )
+        )
+
+        coefficients, *_ = np.linalg.lstsq(
+            design,
+            rss_grid,
+            rcond=None,
+        )
+
+        fitted = (
+            design
+            @ coefficients
+        )
+
+        sse = float(
+            np.sum(
+                (
+                    rss_grid
+                    - fitted
+                )
+                ** 2
+            )
+        )
+
+        if sse < best_sse:
+            best_sse = sse
+            best_break = float(
+                breakpoint
+            )
+
+            best_coefficients = np.asarray(
+                coefficients,
+                dtype=np.float64,
+            ).copy()
+
+    if (
+        best_break is None
+        or best_coefficients is None
+    ):
+        raise RuntimeError(
+            "historical R4 piecewise-affine fit failed"
+        )
+
+    intercept, slope, slope_change = map(
+        float,
+        best_coefficients,
+    )
+
+    piecewise_fit = (
+        intercept
+        + slope * k_grid
+        + slope_change
+        * np.maximum(
+            0.0,
+            k_grid - best_break,
+        )
+    )
+
+    piecewise_fit_at_break = float(
+        intercept
+        + slope * best_break
+    )
+
+    # ------------------------------------------------------------------
+    # Result.
+    # ------------------------------------------------------------------
+
+    return RssShapeAnalysis(
+        frequency_hz=float(
+            frequency
+        ),
+        theoretical_wavenumber_rad_m=float(
+            k_theory
+        ),
+        baseline_wavenumber_rad_m=float(
+            baseline_wavenumber
+        ),
+        k_grid=k_grid,
+        rss_grid=rss_grid,
+        local_minima_wavenumbers_rad_m=local_minima_k,
+        local_minima_rss=local_minima_rss,
+        second_derivative=np.asarray(
+            second_derivative,
+            dtype=np.float64,
+        ),
+        second_derivative_wavenumber_rad_m=second_k,
+        piecewise_break_wavenumber_rad_m=float(
+            best_break
+        ),
+        piecewise_fit=np.asarray(
+            piecewise_fit,
+            dtype=np.float64,
+        ),
+        piecewise_fit_at_break=piecewise_fit_at_break,
     )
