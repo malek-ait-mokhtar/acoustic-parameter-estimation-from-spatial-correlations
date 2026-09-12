@@ -12,6 +12,7 @@ The implementation is built around reproducible numerical experiments on planar 
 
 
 
+
 ## Overview
 
 For a diffuse acoustic field, the spatial coherence between two microphones separated by a distance $r$ is modeled by
@@ -20,28 +21,25 @@ $$
 \Gamma(r,f) \approx \frac{\sin(kr)}{kr},
 $$
 
-where $k$ is the acoustic wavenumber. At each frequency, $k$ is estimated by minimizing
+where $k$ is the acoustic wavenumber. At each frequency, it is estimated by minimizing the residual sum of squares
 
 $$
-\operatorname{RSS}(k)
-=
-\sum_{i<j}
-\left[
-\widehat{\Gamma}_{ij}(f)
--
-\frac{\sin(k r_{ij})}{k r_{ij}}
-\right]^2.
+RSS(k) = \sum_{i<j} \left( \widehat{\Gamma}_{ij}(f) - \frac{\sin(k r_{ij})}{k r_{ij}} \right)^2.
 $$
 
 The corresponding sound-speed estimate is then
 
 $$
-\hat{c}(f)=\frac{2\pi f}{\hat{k}(f)}.
+\hat{c}(f) = \frac{2\pi f}{\hat{k}(f)}.
 $$
 
 This works well over a substantial part of the spectrum, but the objective becomes strongly multimodal at higher frequencies. A bounded scalar optimizer may then converge to a physically incorrect local minimum even when another minimum lies close to the theoretical wavenumber.
 
 The project therefore investigates the geometry of the RSS objective itself, compares several high-frequency estimators, and evaluates a local-minimum selection strategy on a 24-microphone array.
+
+
+
+
 
 
 ## Method
@@ -56,9 +54,11 @@ The same pipeline is used across several UMA16 experiments and a custom 24-micro
 
 At high frequencies, the RSS objective can contain many competing local minima. The figure below shows a representative landscape for the 24-microphone experiment.
 
-![RSS landscape](results/array24/rss_landscapes/rss_1550hz.png)
+<p align="center">
+  <img src="results/array24/rss_landscapes/rss_1550hz.png" width="750">
+</p>
 
-Rather than treating the optimizer as a black box, the code explicitly evaluates $\operatorname{RSS}(k)$, detects and refines its local minima, and compares their locations with the physically expected wavenumber.
+Rather than treating the optimizer as a black box, the code explicitly evaluates $RSS(k)$, detects and refines its local minima, and compares their locations with the physically expected wavenumber.
 
 For the 24-microphone experiment, estimates whose baseline wavenumber differs by more than 5% from the theoretical value are corrected by selecting the local RSS minimum closest to that value.
 
@@ -67,7 +67,7 @@ For the 24-microphone experiment, estimates whose baseline wavenumber differs by
 Two additional estimators were investigated on the UMA16 data:
 
 - a **piecewise-affine approximation** of the RSS landscape, using its estimated breakpoint;
-- a **second-derivative estimator**, based on the location of the maximum of $\operatorname{RSS}''(k)$.
+- a **second-derivative estimator**, based on the location of the maximum of $RSS''(k)$.
 
 These methods are retained in the repository even though they do not provide satisfactory high-frequency sound-speed estimates. Their mean estimates above approximately 1.5 kHz are respectively about 384.6 m/s and 671.8 m/s.
 
@@ -102,17 +102,23 @@ For UMA16, the retained frequency band starts at the first available frequency w
 
 For the 24-microphone experiment, the local-minimum correction is applied globally for the final summary, while the reported mean is computed from frequencies above 140 Hz.
 
-![24-microphone corrected sound speed](results/final_summary/figure22_array24_corrected.png)
+<p align="center">
+  <img src="results/final_summary/figure22_array24_corrected.png" width="750">
+</p>
 
 The correction substantially reduces the high-frequency failures of the baseline bounded minimization while preserving the original sinc-based physical model.
 
 The Gaussian-process reconstruction provides a separate view of the spatial information contained in the array measurements:
 
-![Gaussian-process reconstructed field](results/uma16/crous/gp/figures/figure24_reconstructed_field.png)
+<p align="center">
+  <img src="results/uma16/crous/gp/figures/figure24_reconstructed_field.png" width="600">
+</p>
 
 Its leave-one-out validation gives a magnitude correlation of approximately 0.66:
 
-![Gaussian-process leave-one-out validation](results/uma16/crous/gp/figures/figure26_loo_prediction.png)
+<p align="center">
+  <img src="results/uma16/crous/gp/figures/figure26_loo_prediction.png" width="550">
+</p>
 
 ## Repository structure
 
