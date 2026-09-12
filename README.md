@@ -6,18 +6,24 @@ The project studies how the speed of sound can be inferred from measured spatial
 
 The implementation is built around reproducible numerical experiments on planar and three-dimensional microphone arrays.
 
+
+
+
+
+
+
 ## Overview
 
-For a diffuse acoustic field, the spatial coherence between two microphones separated by a distance \(r\) is modeled by
+For a diffuse acoustic field, the spatial coherence between two microphones separated by a distance $r$ is modeled by
 
-\[
+$$
 \Gamma(r,f) \approx \frac{\sin(kr)}{kr},
-\]
+$$
 
-where \(k\) is the acoustic wavenumber. At each frequency, \(k\) is estimated by minimizing
+where $k$ is the acoustic wavenumber. At each frequency, $k$ is estimated by minimizing
 
-\[
-RSS(k)
+$$
+\operatorname{RSS}(k)
 =
 \sum_{i<j}
 \left[
@@ -25,17 +31,18 @@ RSS(k)
 -
 \frac{\sin(k r_{ij})}{k r_{ij}}
 \right]^2.
-\]
+$$
 
 The corresponding sound-speed estimate is then
 
-\[
-\hat c(f)=\frac{2\pi f}{\hat k(f)}.
-\]
+$$
+\hat{c}(f)=\frac{2\pi f}{\hat{k}(f)}.
+$$
 
 This works well over a substantial part of the spectrum, but the objective becomes strongly multimodal at higher frequencies. A bounded scalar optimizer may then converge to a physically incorrect local minimum even when another minimum lies close to the theoretical wavenumber.
 
 The project therefore investigates the geometry of the RSS objective itself, compares several high-frequency estimators, and evaluates a local-minimum selection strategy on a 24-microphone array.
+
 
 ## Method
 
@@ -51,7 +58,7 @@ At high frequencies, the RSS objective can contain many competing local minima. 
 
 ![RSS landscape](results/array24/rss_landscapes/rss_1550hz.png)
 
-Rather than treating the optimizer as a black box, the code explicitly evaluates \(RSS(k)\), detects and refines its local minima, and compares their locations with the physically expected wavenumber.
+Rather than treating the optimizer as a black box, the code explicitly evaluates $\operatorname{RSS}(k)$, detects and refines its local minima, and compares their locations with the physically expected wavenumber.
 
 For the 24-microphone experiment, estimates whose baseline wavenumber differs by more than 5% from the theoretical value are corrected by selecting the local RSS minimum closest to that value.
 
@@ -60,7 +67,7 @@ For the 24-microphone experiment, estimates whose baseline wavenumber differs by
 Two additional estimators were investigated on the UMA16 data:
 
 - a **piecewise-affine approximation** of the RSS landscape, using its estimated breakpoint;
-- a **second-derivative estimator**, based on the location of the maximum of \(RSS''(k)\).
+- a **second-derivative estimator**, based on the location of the maximum of $\operatorname{RSS}''(k)$.
 
 These methods are retained in the repository even though they do not provide satisfactory high-frequency sound-speed estimates. Their mean estimates above approximately 1.5 kHz are respectively about 384.6 m/s and 671.8 m/s.
 
@@ -70,9 +77,9 @@ Keeping these negative results was useful: they show that identifying a visually
 
 The project also reconstructs a complex acoustic pressure field from the 16 UMA16 measurements using a Gaussian process with the same diffuse-field covariance structure,
 
-\[
+$$
 K(r)=\frac{\sin(kr)}{kr}.
-\]
+$$
 
 At approximately 500 Hz, the GP predicts the complex pressure over a \(220\times220\) spatial grid and provides a predictive uncertainty estimate.
 
