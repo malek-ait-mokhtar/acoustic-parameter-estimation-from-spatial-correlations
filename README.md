@@ -1,17 +1,12 @@
-# Acoustic Parameter Estimation from Spatial Correlations
+# Sound-Speed Estimation Using Spatial Correlations & Gaussian Processes
 
-Estimation of acoustic parameters from microphone-array measurements using spatial coherence, nonlinear optimization, and Gaussian-process regression.
+*Estimating sound speed from microphone-array spatial coherence, with an analysis of high-frequency optimization failures and Gaussian-process reconstruction of the acoustic field.*
 
-The project studies how the speed of sound can be inferred from measured spatial correlations, why the resulting inverse problem becomes difficult at high frequencies, and how alternative estimators behave when the standard least-squares approach becomes unreliable.
+The project investigates why this estimation problem becomes difficult at high frequencies, and how alternative wavenumber estimators behave when standard least-squares minimization becomes unreliable.
 
-The implementation is built around reproducible numerical experiments on planar and three-dimensional microphone arrays.
+A Gaussian process based on the same spatial-coherence model is also used to reconstruct the complex acoustic pressure field and quantify prediction uncertainty from sparse microphone measurements.
 
-
-
-
-
-
-
+The methods are evaluated through numerical experiments on planar and three-dimensional microphone arrays.
 
 ## Overview
 
@@ -33,9 +28,9 @@ $$
 \hat{c}(f) = \frac{2\pi f}{\hat{k}(f)}.
 $$
 
-This works well over a substantial part of the spectrum, but the objective becomes strongly multimodal at higher frequencies. A bounded scalar optimizer may then converge to a physically incorrect local minimum even when another minimum lies close to the theoretical wavenumber.
+This works well over a substantial part of the spectrum, but the objective function becomes strongly multimodal at higher frequencies. A bounded scalar optimizer may then converge to a physically incorrect local minimum even when another minimum lies close to the theoretical wavenumber.
 
-The project therefore investigates the geometry of the RSS objective itself, compares several high-frequency estimators, and evaluates a local-minimum selection strategy on a 24-microphone array.
+The project therefore investigates the geometry of the RSS objective function itself, compares several high-frequency estimators, and evaluates a local-minimum selection strategy on a 24-microphone array.
 
 
 
@@ -52,7 +47,7 @@ The same pipeline is used across several UMA16 experiments and a custom 24-micro
 
 ### Multimodal RSS landscape
 
-At high frequencies, the RSS objective can contain many competing local minima. The figure below shows a representative landscape for the 24-microphone experiment.
+At high frequencies, the RSS objective function can contain many competing local minima. The figure below shows a representative landscape for the 3D-array experiment.
 
 <p align="center">
   <img src="results/array24/rss_landscapes/rss_1550hz.png" width="750">
@@ -60,7 +55,7 @@ At high frequencies, the RSS objective can contain many competing local minima. 
 
 Rather than treating the optimizer as a black box, the code explicitly evaluates $RSS(k)$, detects and refines its local minima, and compares their locations with the physically expected wavenumber.
 
-For the 24-microphone experiment, estimates whose baseline wavenumber differs by more than 5% from the theoretical value are corrected by selecting the local RSS minimum closest to that value.
+For the 3D array, estimates whose baseline wavenumber differs by more than 5% from the theoretical value are corrected by selecting the local RSS minimum closest to that value.
 
 ### Alternative high-frequency estimators
 
@@ -71,7 +66,7 @@ Two additional estimators were investigated on the UMA16 data:
 
 These methods are retained in the repository even though they do not provide satisfactory high-frequency sound-speed estimates. Their mean estimates above approximately 1.5 kHz are respectively about 384.6 m/s and 671.8 m/s.
 
-Keeping these negative results was useful: they show that identifying a visually meaningful feature of the objective is not sufficient to obtain a physically meaningful estimator.
+Keeping these negative results was useful: they show that identifying a visually meaningful feature of the objective function is not sufficient to obtain a physically meaningful estimator.
 
 ### Gaussian-process field reconstruction
 
@@ -81,7 +76,7 @@ $$
 K(r)=\frac{\sin(kr)}{kr}.
 $$
 
-At approximately 500 Hz, the GP predicts the complex pressure over a \(220\times220\) spatial grid and provides a predictive uncertainty estimate.
+At approximately 500 Hz, the GP predicts the complex pressure over a $220 \times 220$ spatial grid and provides a predictive uncertainty estimate.
 
 Leave-one-out cross-validation is used to assess reconstruction quality independently at each microphone location.
 
@@ -93,14 +88,14 @@ The main numerical results are summarized below.
 |---|---:|
 | UMA16 retained-band mean sound speed | **345.50 m/s** |
 | UMA16 retained-band interval (±5%) | **[328.23, 362.78] m/s** |
-| 24-microphone corrected mean sound speed | **342.14 m/s** |
-| 24-microphone interval (±5%) | **[325.03, 359.25] m/s** |
+| 24-microphone 3D array — corrected mean sound speed | **342.14 m/s** |
+| 24-microphone 3D array — interval (±5%) | **[325.03, 359.25] m/s** |
 | GP leave-one-out correlation | **0.661** |
 | GP leave-one-out NRMSE | **0.316** |
 
 For UMA16, the retained frequency band starts at the first available frequency whose estimated sound speed exceeds 300 m/s and ends at 1.5 kHz.
 
-For the 24-microphone experiment, the local-minimum correction is applied globally for the final summary, while the reported mean is computed from frequencies above 140 Hz.
+For the 24-microphone 3D array, the local-minimum correction is applied across the full frequency range, while the mean sound speed is computed above 140 Hz.
 
 <p align="center">
   <img src="results/final_summary/figure22_array24_corrected.png" width="750">
@@ -126,18 +121,18 @@ Its leave-one-out validation gives a magnitude correlation of approximately 0.66
 .
 ├── src/acoustic_estimation/
 │   ├── estimation.py          # sinc fitting, RSS analysis and estimators
-│   ├── gaussian_process.py    # complex GP reconstruction and LOOCV
+│   ├── gaussian_process.py    # gaussian-process field reconstruction
 │   ├── geometry.py            # microphone-array geometries
 │   ├── io.py                  # data loading
-│   ├── models.py              # acoustic models
-│   ├── plotting.py            # diagnostic and publication figures
-│   ├── results.py             # result serialization
-│   └── spectral.py            # spectra, CSM and coherence estimation
+│   ├── models.py              # spatial-coherence models
+│   ├── plotting.py            # figures and diagnostics
+│   ├── results.py             # saving and loading analysis results
+│   └── spectral.py            # spectral and coherence estimation
 │
-├── scripts/                   # command-line analysis workflows
-├── tests/                     # numerical and regression tests
-├── results/                   # versioned reference outputs and figures
-└── docs/
+├── scripts/                   # analysis and plotting scripts
+├── tests/                     # test suite
+├── results/                   # numerical results and generated figures
+└── docs/                      # report and presentation
     ├── report_fr.pdf
     └── presentation_fr.pdf
 ```
@@ -157,7 +152,7 @@ The main dependencies are NumPy, SciPy and Matplotlib.
 
 ## Reproducing the analyses
 
-Reference numerical outputs are versioned under `results/`, so the main results and figures can be inspected without the original recordings.
+Precomputed results are included under `results/`, so the main analyses and figures can be inspected without the original recordings.
 
 ### UMA16
 
@@ -170,7 +165,7 @@ python scripts/analyze_uma16.py /path/to/recording-directory \
   --diagnostics
 ```
 
-For the CROUS experiment, the two alternative high-frequency RSS estimators are reproduced with
+For the CROUS experiment, the two alternative high-frequency RSS estimators can be applied with
 
 ```bash
 python scripts/apply_uma16_piecewise.py \
@@ -200,7 +195,7 @@ python scripts/analyze_array24.py /path/to/array24_recording.npy \
   --output results/array24/baseline.npz
 ```
 
-The high-frequency local-minimum correction is then reproduced with
+The high-frequency local-minimum correction can then be applied with
 
 ```bash
 python scripts/correct_array24_minima.py \
@@ -209,7 +204,7 @@ python scripts/correct_array24_minima.py \
   --figure results/array24/figures/sound_speed_local_minima_correction.png
 ```
 
-For the final broadband summary, the same correction is applied across the full frequency range:
+For the broadband sound-speed estimate, the same correction is applied across the full frequency range:
 
 ```bash
 python scripts/correct_array24_minima.py \
@@ -220,7 +215,7 @@ python scripts/correct_array24_minima.py \
 
 Individual RSS landscapes can also be inspected with `scripts/analyze_rss_landscape.py`.
 
-The final UMA16 and 24-microphone sound-speed summaries are generated with
+The sound-speed comparison figures are generated with
 
 ```bash
 python scripts/plot_final_sound_speed_summary.py
@@ -245,7 +240,7 @@ python scripts/plot_uma16_gp_reconstruction.py
 
 ## Testing
 
-The numerical pipeline is covered by **117 automated tests**, including tests for spectral processing, microphone geometry, sinc fitting, local-minimum detection and refinement, high-frequency estimators, plotting, the 24-microphone correction, and Gaussian-process reconstruction.
+The numerical pipeline is covered by 117 automated tests, including spectral processing, microphone geometry, sinc fitting, local-minimum detection and refinement, high-frequency estimators, the 3D-array correction, and Gaussian-process reconstruction.
 
 Run the complete suite with
 
@@ -253,30 +248,28 @@ Run the complete suite with
 python -m pytest -q
 ```
 
-The refactored implementations were also checked against the original research scripts during development, including full-field GP reconstruction and the high-frequency UMA16 estimators.
-
 ## Experimental data
 
 The original experimental recordings are not distributed with this repository.
 
-Versioned reference outputs are provided under `results/`, allowing the numerical results and figures to be inspected and regenerated without the raw recordings. The analysis scripts can also process the original recordings when they are available.
+Precomputed numerical results are included under `results/`, allowing the analyses and figures to be inspected without the raw recordings. The scripts can also process the original recordings when they are available.
 
 ## Report and presentation
 
-The original project documentation is available in French:
+The accompanying project documentation is available in French:
 
 - [`docs/report_fr.pdf`](docs/report_fr.pdf)
 - [`docs/presentation_fr.pdf`](docs/presentation_fr.pdf)
 
-These documents contain the experimental context, derivations and discussion underlying the implementation in this repository.
+The report provides the experimental context, theoretical derivations, and a more detailed discussion of the results presented here.
 
 ## Authors
 
-* Malek Aït-Mokhtar
-* Malo Bonnefoy
-* Antoine Bonnin
-* Abdessellam Garrou
-* Antoine Maillet
+- Malek Aït-Mokhtar
+- Malo Bonnefoy
+- Antoine Bonnin
+- Abdessellam Garrou
+- Antoine Maillet
 
 Project supervised by **Gilles Chardon**
 
